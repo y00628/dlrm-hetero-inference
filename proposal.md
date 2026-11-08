@@ -1,10 +1,10 @@
 # TITLE
-<Project title> — <Name 1> (andrewid1), <Name 2> (andrewid2)
+Scalable DLRM Inference across GPUs and CPU Memory — Yosen Lin, Louis Liu
 
 > Teams must be exactly two students.
 
 # URL
-<https://...>  <!-- project web page (GitHub Pages or Andrew UserWeb) -->
+<https://y00628.github.io/dlrm-hetero-inference/>  <!-- project web page (GitHub Pages or Andrew UserWeb) -->
 
 # SUMMARY
 <2–3 sentences: what you will build/study + which parallel systems (e.g., GHC CPU cores, NVIDIA GPU, PSC machines).>
