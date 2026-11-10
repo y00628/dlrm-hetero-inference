@@ -10,7 +10,7 @@
 
 <header>
   <h1>Scalable DLRM Inference across GPUs and CPU Memory</h1>
-  <p>Yosen Lin &amp; Louis Liu</p>
+  <p>Yosen Lin (yosenl) &amp; Louis Liu (kuanyenl)</p>
   <p>15-618 Final Project Proposal</p>
 </header>
 
@@ -38,23 +38,52 @@
 
 <section id="summary">
   <h2>Summary</h2>
-  <p class="todo">TODO: 2–3 sentences. What you plan to do and which parallel systems you will work with.</p>
+  <p>We will design and evaluate an end-to-end, multi-GPU inference engine for Deep Learning Recommendation Models (DLRM) using hybrid parallelism. We shard embedding tables across multiple GPUs (model parallelism) and tier cold rows into host CPU DRAM, while replicating the dense interaction and MLP layers across GPUs (data parallelism), synchronized via an all-to-all exchange built on NCCL point-to-point primitives. We will evaluate how inference throughput scales across 1, 2, 4, and 8 GPUs under varying access skew, batch sizes, and dense compute intensities.</p>
+  <p>In addition, we use multi-threaded CPU gathering with AVX2 partial pooling to minimize PCIe transfer volume, and overlap dense computation with embedding communication across concurrent CUDA streams within each batch.</p>
 </section>
 
 <section id="background">
   <h2>Background</h2>
-  <p class="todo">TODO: A few paragraphs describing the application / piece you will implement, with a block diagram or pseudocode. Which aspects benefit from parallelism, and why?</p>
+  <p>A DLRM predicts the probability that a user will click an item. For each user-item pair, a bottom multilayer perceptron (MLP) transforms the numerical features into a dense vector. Each categorical feature supplies row IDs into an embedding table, and the retrieved vectors are summed into one vector per feature. The model computes pairwise dot products among the dense vector and the pooled embeddings. A top MLP uses the dense vector and these interactions to predict the click probability.</p>
+  <p>Three aspects of the problem can benefit from parallelism, explained alongside the figure below:</p>
+  <ul>
+    <li><b>Embedding lookup across tables:</b> Lookups in one table do not depend on results from another, so the GPUs can perform them concurrently and use their combined memory bandwidth. The host CPU can also gather cold rows while the GPUs gather hot rows.</li>
+    <li><b>Dense computation across samples:</b> Each GPU runs a copy of the bottom MLP, feature interaction, and top MLP for its assigned samples. Predictions are independent across samples, so the GPUs can score different portions of the batch concurrently. The all-to-all exchange sends each pooled embedding to the GPU responsible for scoring its sample.</li>
+    <li><b>Overlap between dense and embedding paths:</b> The bottom MLP uses only numerical features, so it can run while embedding lookups, pooling, and communication are in progress. The two paths meet at the dot interaction, which needs both the bottom MLP output and all pooled embeddings for the sample.</li>
+  </ul>
+  <p>The figure below shows a simple version of how parallelism can be exploited for this problem.</p>
+  <figure>
+    <img src="parallelism-diagram.png" alt="Block diagram: cold rows pooled on the host CPU and sent over PCIe; embedding tables sharded across GPU 0 and GPU 1 (model parallel); all-to-all exchange; then bottom MLP output and embeddings feed dot interaction and top MLP on each GPU (data parallel) to produce the click probability.">
+    <figcaption>Hybrid parallelism: embedding tables are sharded across GPUs with cold rows tiered to host DRAM (model parallel); after the all-to-all, each GPU scores its own samples (data parallel).</figcaption>
+  </figure>
 </section>
 
 <section id="challenge">
   <h2>The Challenge</h2>
-  <p class="todo">TODO: Workload: dependencies, memory access characteristics (locality? communication-to-computation ratio?), divergent execution.</p>
-  <p class="todo">TODO: Constraints: what makes mapping the workload to the system difficult? What do you hope to learn?</p>
+  <p>In DLRMs, large embedding footprints exceed individual GPU memory capacity, while inter-device and host-to-device transfers introduce communication bottlenecks across the CPU and GPU memory hierarchies. The primary system challenges are:</p>
+  <ul>
+    <li><b>Memory-bound random gathers:</b> Each embedding lookup into GB-scale tables is very likely a cache miss with no spatial locality, so performance is dominated by GPU memory and PCIe transfer throughput.</li>
+    <li><b>Data skew and load imbalance:</b> Real-world categorical features follow power-law distributions, so work is distributed unevenly across GPUs. Every GPU must wait for the slowest one at the all-to-all barrier.</li>
+    <li><b>Communication-to-computation ratio:</b> In the all-to-all stage, each GPU must send its sharded embedding batches to the other GPUs. On PCIe-interconnected nodes, communication latency can dominate execution time.</li>
+    <li><b>Global synchronization barrier:</b> The feature interaction stage cannot start until all embeddings arrive, creating a global barrier for every batch.</li>
+  </ul>
+  <h3>System Constraints</h3>
+  <ul>
+    <li><b>PCIe bottleneck:</b> PCIe 3.0 provides roughly 12 GB/s, while the RTX 2080's GDDR6 provides 448 GB/s, so each cold row fetched across PCIe is expensive.</li>
+    <li><b>Communication-to-lookup ratio in multi-GPU scaling:</b> Speedup depends on the ratio between local lookup time and cross-GPU communication time. For features with little lookup work, communication time dominates and can cause negative speedup when scaling to more GPUs.</li>
+  </ul>
 </section>
 
 <section id="resources">
   <h2>Resources</h2>
-  <p class="todo">TODO: Machines (GHC / PSC / EC2…), starter code or from scratch, papers and references, anything you still need.</p>
+  <p>We will build our DLRM inference engine from scratch in C++ and CUDA and use NVIDIA's PyTorch DLRM implementation as our performance baseline. We plan to use the GHC cluster for development and single-GPU tests with host memory, then use PSC for multi-GPU scaling tests. Our main hardware need is access to a single PSC node with eight GPUs so we can compare performance across 1, 2, 4, and 8 GPUs on the same machine. The eight-GPU test depends on node availability.</p>
+  <p>For datasets, we plan to use Meta's synthetic DLRM dataset to test embedding lookup and pooling performance under realistic access patterns, and the Criteo Kaggle dataset to check correctness and to see how inference scales when each categorical feature requires just one lookup.</p>
+  <h3>References</h3>
+  <ul>
+    <li><a href="https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM">NVIDIA DeepLearningExamples: PyTorch DLRM</a></li>
+    <li><a href="https://github.com/facebookresearch/dlrm_datasets">Meta DLRM datasets</a></li>
+    <li><a href="https://www.kaggle.com/competitions/criteo-display-ad-challenge/overview">Criteo Display Advertising Challenge (Kaggle)</a></li>
+  </ul>
 </section>
 
 <section id="goals">
@@ -72,19 +101,24 @@
 
 <section id="platform">
   <h2>Platform Choice</h2>
-  <p class="todo">TODO: Why this machine / language fits the workload.</p>
+  <ul>
+    <li><b>C++:</b> control over embedding layout in host memory</li>
+    <li><b>CUDA:</b> parallelizing GPU lookups and overlapping the bottom MLP with embedding work</li>
+    <li><b>NCCL:</b> sending pooled embeddings to the GPUs that score each sample</li>
+    <li><b>GHC:</b> single-GPU memory tiering tests</li>
+    <li><b>PSC:</b> measuring multi-GPU scaling and communication costs</li>
+  </ul>
 </section>
 
 <section id="schedule">
   <h2>Schedule</h2>
   <ul>
-    <li>Nov 9 – Nov 15: <span class="todo">TODO</span></li>
-    <li>Nov 16 – Nov 22: <span class="todo">TODO</span></li>
-    <li>Nov 23: Milestone report due</li>
-    <li>Nov 23 – Nov 29: <span class="todo">TODO</span></li>
-    <li>Nov 30 – Dec 6: <span class="todo">TODO</span></li>
-    <li>Dec 7 – Dec 10: <span class="todo">TODO</span> (final report due Dec 10)</li>
-    <li>Dec 11: Poster session</li>
+    <li><b>Nov 9 – Nov 15:</b> Set up GHC and request PSC access; prepare small Criteo and Meta test batches; build the multithreaded CPU reference and start the single-GPU CUDA baseline.</li>
+    <li><b>Nov 16 – Nov 22:</b> Finish the all-resident single-GPU baseline and validate its outputs against the CPU reference; add OpenMP and AVX2 pooling for cold rows and measure PCIe traffic with and without CPU pooling; draft the milestone report.</li>
+    <li><b>Nov 23 – Nov 29:</b> Submit the milestone report (Nov 23, 11:59 PM); validate table-wise sharding and NCCL all-to-all on two PSC GPUs.</li>
+    <li><b>Nov 30 – Dec 6:</b> Add CUDA stream overlap and compare it with serialized execution; measure throughput at 1, 2, and 4 GPUs on the same PSC node (8 GPUs if available); vary pooling factor and access skew, test a few batch sizes and MLP widths, and measure time spent in each inference stage; try row-wise sharding if the core benchmarks are complete.</li>
+    <li><b>Dec 7 – Dec 10:</b> Rerun key benchmarks and prepare scaling plots and per-stage timing charts; submit the final report (Dec 10, 11:59 PM).</li>
+    <li><b>Dec 11:</b> Poster session</li>
   </ul>
 </section>
 
