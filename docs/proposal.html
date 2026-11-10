@@ -77,21 +77,62 @@
 
 <section id="resources">
   <h2>Resources</h2>
-  <p>We will build our DLRM inference engine from scratch in C++ and CUDA and use NVIDIA's PyTorch DLRM implementation as our performance baseline. We plan to use the GHC cluster for development and single-GPU tests with host memory, then use PSC for multi-GPU scaling tests. Our main hardware need is access to a single PSC node with eight GPUs so we can compare performance across 1, 2, 4, and 8 GPUs on the same machine. The eight-GPU test depends on node availability.</p>
-  <p>For datasets, we plan to use Meta's synthetic DLRM dataset to test embedding lookup and pooling performance under realistic access patterns, and the Criteo Kaggle dataset to check correctness and to see how inference scales when each categorical feature requires just one lookup.</p>
+  <p>We will build our DLRM inference engine from scratch in C++ and CUDA and use NVIDIA's PyTorch DLRM implementation as an external performance baseline on a matching workload. We plan to use the GHC cluster for development and single-GPU tests with host memory, then use PSC for multi-GPU scaling tests. Our main hardware need is access to a single PSC node with eight GPUs so we can compare performance across 1, 2, 4, and 8 GPUs on the same machine. The eight-GPU test depends on node availability.</p>
+  <p>For datasets, we plan to use Meta's synthetic DLRM dataset and MLPerf DLRM v2 Multi-Hot Criteo to test embedding lookup and pooling performance under realistic access patterns, and the Criteo Kaggle dataset to check correctness and to see how inference scales when each categorical feature requires just one lookup.</p>
 </section>
 
 <section id="goals">
   <h2>Goals and Deliverables</h2>
-  <h3>Plan to Achieve:</h3>
-  <ul><li class="todo">TODO: goal + justification (e.g. “Nx speedup because …”)</li></ul>
-  <p class="todo">TODO: If work goes more slowly, we aim to still …</p>
-  <h3>Hope to Achieve:</h3>
-  <ul><li class="todo">TODO: stretch goals if ahead of schedule</li></ul>
-  <h3>Demo Plan for Poster Session:</h3>
-  <ul><li class="todo">TODO: graphs and/or optional live demo</li></ul>
-  <h3>Analysis Goals:</h3>
-  <ul><li class="todo">TODO: what do you want to learn about the workload or system?</li></ul>
+  <p>Our system aims to maximize DLRM inference throughput while navigating hardware resource limits and GPU memory footprints. To isolate parallel speedup and benchmark system efficiency, we establish numerical ground-truth baselines, introduce three architectural optimizations, perform quantitative workload characterization, and target stretch goals.</p>
+
+  <h3>Baseline</h3>
+  <p>We will establish two baseline implementations for performance evaluation and ground truth:</p>
+  <ul>
+    <li><b>Multi-threaded CPU:</b> An end-to-end CPU implementation used for numerical ground truth and single-node baseline timing.</li>
+    <li><b>Single-GPU:</b> A baseline engine on a single GPU where all tables and MLPs reside entirely in GPU memory, executed sequentially without stream concurrency or CPU tiering.</li>
+  </ul>
+
+  <h3>System Architecture &amp; Approaches</h3>
+  <p>To break the memory capacity limit and communication bottleneck, we implement three complementary approaches:</p>
+  <ul>
+    <li><b>CPU–GPU memory tiering:</b> We divide memory into a GPU fast tier and a large CPU slow tier. CPU threads use OpenMP and SIMD to aggregate cold vectors within host memory before transferring them across PCIe. We also enforce NUMA-aware thread and memory binding to eliminate cross-socket interconnect penalties.</li>
+    <li><b>Distributed hybrid parallelism &amp; sharding:</b> We partition memory-intensive embedding tables across GPUs (model parallelism) while replicating the lightweight dense MLPs on every GPU (data parallelism). For inter-GPU sharding we adopt two strategies:
+      <ul>
+        <li><b>Table-wise sharding:</b> Assigns entire tables to specific GPUs, minimizing communication volume but vulnerable to load imbalance.</li>
+        <li><b>Row-wise sharding:</b> Horizontally slices every table across all GPUs, achieving perfect load balance at the expense of higher communication volume.</li>
+      </ul>
+    </li>
+    <li><b>Asynchronous intra-batch concurrency:</b> On each GPU, we instantiate two concurrent CUDA streams synchronized via lightweight CUDA events:
+      <ul>
+        <li><b>Dense stream:</b> Computes the continuous bottom MLP.</li>
+        <li><b>Sparse stream:</b> Concurrently gathers local hot embeddings, coordinates with CPU cold transfers, and executes the cross-GPU exchange.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Quantitative Analysis</h3>
+  <p>We will tune three workload parameters to evaluate how dataset characteristics affect system performance:</p>
+  <ul>
+    <li><b>Pooling factor (L):</b> Controls the amount of local gather computation relative to cross-GPU communication, tying into the communication-to-lookup ratio constraint.</li>
+    <li><b>Data skewness:</b> Governs the GPU VRAM cache hit rate versus PCIe offload volume, letting us evaluate performance and cost-efficiency trade-offs across GPU + CPU tiering architectures.</li>
+    <li><b>Dense compute intensity:</b> Shifts the workload from memory-bound to compute-bound, showing when embedding placement and communication optimizations stop affecting end-to-end throughput.</li>
+  </ul>
+
+  <h3>Measurable Deliverables (Plan to Achieve)</h3>
+  <ul>
+    <li><b>Correctness:</b> All GPU, tiered, and multi-GPU configurations match the CPU reference within 0.01% relative error.</li>
+    <li><b>CPU tier:</b> ≥1.5× higher cold-row throughput for CPU partial pooling than for GPU zero-copy when bags have ≥4 cold IDs, since partial pooling sends one vector per bag over PCIe instead of every row.</li>
+    <li><b>Multi-GPU scaling:</b> ≥3× embedding-stage speedup from 1 to 4 V100 GPUs with table-wise sharding when L ≥ 2.25·r, where L is the pooling factor and r is the ratio of measured GPU gather bandwidth to all-to-all bandwidth, as predicted by our model Speedup = 4 / (1 + 0.75·r/L).</li>
+    <li><b>Stream concurrency:</b> Overlapping the bottom MLP with the sparse path hides ≥50% of the shorter path's time.</li>
+    <li><b>Analysis:</b> Per-stage time breakdowns for every configuration, a comparison of load balance and exchange volume between table-wise and row-wise sharding, and the MLP width at which dense compute dominates.</li>
+  </ul>
+
+  <h3>Hope to Achieve (Stretch Goals)</h3>
+  <ul>
+    <li><b>Hybrid sharding:</b> Shard massive, skewed tables row-wise while keeping smaller tables table-wise, to combine the benefits of both strategies.</li>
+    <li><b>Pre-load batch buffering:</b> Preload the next batch while the GPU computes the current one.</li>
+    <li><b>GPU count at fixed capacity:</b> Compare "2 GPUs + CPU tier" against "4–8 GPUs with all tables in GPU memory" in throughput per GPU across skew levels.</li>
+  </ul>
 </section>
 
 <section id="platform">
@@ -123,6 +164,7 @@
     <li><a href="https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM">NVIDIA DeepLearningExamples: PyTorch DLRM</a></li>
     <li><a href="https://github.com/facebookresearch/dlrm_datasets">Meta DLRM datasets</a></li>
     <li><a href="https://www.kaggle.com/competitions/criteo-display-ad-challenge/overview">Criteo Display Advertising Challenge (Kaggle)</a></li>
+      <li><a href="https://inference.mlcommons-storage.org/index.html">MLCommons Inference storage</a></li>
   </ul>
 </section>
 
