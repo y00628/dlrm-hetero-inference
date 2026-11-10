@@ -83,42 +83,9 @@
 
 <section id="goals">
   <h2>Goals and Deliverables</h2>
-  <p>Our system aims to maximize DLRM inference throughput while navigating hardware resource limits and GPU memory footprints. To isolate parallel speedup and benchmark system efficiency, we establish numerical ground-truth baselines, introduce three architectural optimizations, perform quantitative workload characterization, and target stretch goals.</p>
+  <p>Our system aims to maximize DLRM inference throughput while navigating hardware resource limits and GPU memory footprints. We will build two baselines, a multi-threaded CPU implementation (numerical ground truth) and an all-resident single-GPU engine, then add three optimizations: CPU–GPU memory tiering with OpenMP/AVX2 partial pooling, table-wise and row-wise embedding sharding across GPUs, and two-stream (dense/sparse) overlap within each batch. We will characterize their effect by varying pooling factor, data skewness, and dense compute intensity.</p>
 
-  <h3>Baseline</h3>
-  <p>We will establish two baseline implementations for performance evaluation and ground truth:</p>
-  <ul>
-    <li><b>Multi-threaded CPU:</b> An end-to-end CPU implementation used for numerical ground truth and single-node baseline timing.</li>
-    <li><b>Single-GPU:</b> A baseline engine on a single GPU where all tables and MLPs reside entirely in GPU memory, executed sequentially without stream concurrency or CPU tiering.</li>
-  </ul>
-
-  <h3>System Architecture &amp; Approaches</h3>
-  <p>To break the memory capacity limit and communication bottleneck, we implement three complementary approaches:</p>
-  <ul>
-    <li><b>CPU–GPU memory tiering:</b> We divide memory into a GPU fast tier and a large CPU slow tier. CPU threads use OpenMP and SIMD to aggregate cold vectors within host memory before transferring them across PCIe. We also enforce NUMA-aware thread and memory binding to eliminate cross-socket interconnect penalties.</li>
-    <li><b>Distributed hybrid parallelism &amp; sharding:</b> We partition memory-intensive embedding tables across GPUs (model parallelism) while replicating the lightweight dense MLPs on every GPU (data parallelism). For inter-GPU sharding we adopt two strategies:
-      <ul>
-        <li><b>Table-wise sharding:</b> Assigns entire tables to specific GPUs, minimizing communication volume but vulnerable to load imbalance.</li>
-        <li><b>Row-wise sharding:</b> Horizontally slices every table across all GPUs, achieving perfect load balance at the expense of higher communication volume.</li>
-      </ul>
-    </li>
-    <li><b>Asynchronous intra-batch concurrency:</b> On each GPU, we instantiate two concurrent CUDA streams synchronized via lightweight CUDA events:
-      <ul>
-        <li><b>Dense stream:</b> Computes the continuous bottom MLP.</li>
-        <li><b>Sparse stream:</b> Concurrently gathers local hot embeddings, coordinates with CPU cold transfers, and executes the cross-GPU exchange.</li>
-      </ul>
-    </li>
-  </ul>
-
-  <h3>Quantitative Analysis</h3>
-  <p>We will tune three workload parameters to evaluate how dataset characteristics affect system performance:</p>
-  <ul>
-    <li><b>Pooling factor (L):</b> Controls the amount of local gather computation relative to cross-GPU communication, tying into the communication-to-lookup ratio constraint.</li>
-    <li><b>Data skewness:</b> Governs the GPU VRAM cache hit rate versus PCIe offload volume, letting us evaluate performance and cost-efficiency trade-offs across GPU + CPU tiering architectures.</li>
-    <li><b>Dense compute intensity:</b> Shifts the workload from memory-bound to compute-bound, showing when embedding placement and communication optimizations stop affecting end-to-end throughput.</li>
-  </ul>
-
-  <h3>Measurable Deliverables (Plan to Achieve)</h3>
+  <h3>Plan to Achieve</h3>
   <ul>
     <li><b>Correctness:</b> All GPU, tiered, and multi-GPU configurations match the CPU reference within 0.01% relative error.</li>
     <li><b>CPU tier:</b> ≥1.5× higher cold-row throughput for CPU partial pooling than for GPU zero-copy when bags have ≥4 cold IDs, since partial pooling sends one vector per bag over PCIe instead of every row.</li>
@@ -127,7 +94,7 @@
     <li><b>Analysis:</b> Per-stage time breakdowns for every configuration, a comparison of load balance and exchange volume between table-wise and row-wise sharding, and the MLP width at which dense compute dominates.</li>
   </ul>
 
-  <h3>Hope to Achieve (Stretch Goals)</h3>
+  <h3>Hope to Achieve</h3>
   <ul>
     <li><b>Hybrid sharding:</b> Shard massive, skewed tables row-wise while keeping smaller tables table-wise, to combine the benefits of both strategies.</li>
     <li><b>Pre-load batch buffering:</b> Preload the next batch while the GPU computes the current one.</li>
