@@ -25,6 +25,7 @@
     <a href="#goals">Goals &amp; Deliverables</a>
     <a href="#platform">Platform Choice</a>
     <a href="#schedule">Schedule</a>
+    <a href="#references">References</a>
   </nav>
 </aside>
 
@@ -78,12 +79,6 @@
   <h2>Resources</h2>
   <p>We will build our DLRM inference engine from scratch in C++ and CUDA and use NVIDIA's PyTorch DLRM implementation as our performance baseline. We plan to use the GHC cluster for development and single-GPU tests with host memory, then use PSC for multi-GPU scaling tests. Our main hardware need is access to a single PSC node with eight GPUs so we can compare performance across 1, 2, 4, and 8 GPUs on the same machine. The eight-GPU test depends on node availability.</p>
   <p>For datasets, we plan to use Meta's synthetic DLRM dataset to test embedding lookup and pooling performance under realistic access patterns, and the Criteo Kaggle dataset to check correctness and to see how inference scales when each categorical feature requires just one lookup.</p>
-  <h3>References</h3>
-  <ul>
-    <li><a href="https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM">NVIDIA DeepLearningExamples: PyTorch DLRM</a></li>
-    <li><a href="https://github.com/facebookresearch/dlrm_datasets">Meta DLRM datasets</a></li>
-    <li><a href="https://www.kaggle.com/competitions/criteo-display-ad-challenge/overview">Criteo Display Advertising Challenge (Kaggle)</a></li>
-  </ul>
 </section>
 
 <section id="goals">
@@ -119,6 +114,15 @@
     <li><b>Nov 30 – Dec 6:</b> Add CUDA stream overlap and compare it with serialized execution; measure throughput at 1, 2, and 4 GPUs on the same PSC node (8 GPUs if available); vary pooling factor and access skew, test a few batch sizes and MLP widths, and measure time spent in each inference stage; try row-wise sharding if the core benchmarks are complete.</li>
     <li><b>Dec 7 – Dec 10:</b> Rerun key benchmarks and prepare scaling plots and per-stage timing charts; submit the final report (Dec 10, 11:59 PM).</li>
     <li><b>Dec 11:</b> Poster session</li>
+  </ul>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ul>
+    <li><a href="https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM">NVIDIA DeepLearningExamples: PyTorch DLRM</a></li>
+    <li><a href="https://github.com/facebookresearch/dlrm_datasets">Meta DLRM datasets</a></li>
+    <li><a href="https://www.kaggle.com/competitions/criteo-display-ad-challenge/overview">Criteo Display Advertising Challenge (Kaggle)</a></li>
   </ul>
 </section>
 
