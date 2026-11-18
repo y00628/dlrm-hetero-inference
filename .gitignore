@@ -1,0 +1,5 @@
+bin/
+data/
+*.csv
+*.bin
+__pycache__/
