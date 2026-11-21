@@ -13,7 +13,11 @@ COMMON = src/common/config.cpp src/common/trace.cpp src/common/timing.cpp src/co
 GPU_COMMON = src/gpu/embedding.cu
 HEADERS = $(wildcard include/*.h)
 
-all: bin/trace_info bin/check bin/gpu_single bin/gpu_tier_pool
+all: bin/trace_info bin/check bin/cpu_ref bin/gpu_single bin/gpu_tier_pool
+
+bin/cpu_ref: src/ref/cpu_ref.cpp $(COMMON) $(HEADERS)
+	mkdir -p bin
+	$(CXX) $(CXXFLAGS) src/ref/cpu_ref.cpp $(COMMON) -o $@
 
 bin/trace_info: src/tools/trace_info.cpp $(COMMON) $(HEADERS)
 	mkdir -p bin
