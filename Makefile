@@ -11,7 +11,11 @@ NVCCFLAGS = -O3 -std=c++17 -arch=$(ARCH) -Iinclude -Xcompiler -fopenmp,-mavx2,-m
 COMMON = src/common/config.cpp src/common/trace.cpp src/common/timing.cpp src/common/check.cpp
 HEADERS = $(wildcard include/*.h)
 
-all: bin/trace_info bin/check
+all: bin/trace_info bin/check bin/cpu_ref
+
+bin/cpu_ref: src/ref/cpu_ref.cpp $(COMMON) $(HEADERS)
+	mkdir -p bin
+	$(CXX) $(CXXFLAGS) src/ref/cpu_ref.cpp $(COMMON) -o $@
 
 bin/trace_info: src/tools/trace_info.cpp $(COMMON) $(HEADERS)
 	mkdir -p bin
