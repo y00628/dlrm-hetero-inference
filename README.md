@@ -8,6 +8,8 @@ Project web page sources are in `docs/`.
 ```
 include/        config, trace, init (model parameters), timing, check, cuda_utils
 src/common/     shared code
+src/gpu/        embedding kernel, gpu_single, gpu_tier_pool
+src/cpu/        CPU cold-row pooling for the tier (OpenMP + AVX2)
 src/tools/      trace_info (check a trace), check (compare output dumps)
 tools/          gen_trace.py (synthetic Zipf traces, needs numpy)
 configs/        tiny (correctness), small (fits one RTX 2080), medium (10 GB, needs CPU tier)
@@ -20,8 +22,12 @@ data/           generated traces (not committed)
 make                                          # GHC; use "make ARCH=sm_70" on PSC
 python3 tools/gen_trace.py configs/tiny.cfg
 ./bin/trace_info configs/tiny.cfg             # prints OK if the trace matches the config
-./bin/check ref_b0_pooled.bin gpu_b0_pooled.bin
+./bin/gpu_single configs/tiny.cfg            # all tables on the GPU
+./bin/gpu_tier_pool configs/tiny.cfg 0.3      # 30% of rows cached on the GPU, rest pooled on the CPU
+./bin/check data/gpu_single_tiny_b0_pooled.bin data/gpu_tier_pool_tiny_b0_pooled.bin
 ```
+
+Results are appended to `data/results.csv`.
 
 ## Model definition (all implementations must match)
 
