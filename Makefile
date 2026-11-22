@@ -6,7 +6,7 @@ NVCC = nvcc
 ARCH = sm_75
 
 CXXFLAGS = -O3 -std=c++17 -Wall -fopenmp -mavx2 -mfma -Iinclude
-NVCCFLAGS = -O3 -std=c++17 -arch=$(ARCH) -Iinclude -Xcompiler -fopenmp,-mavx2,-mfma
+NVCCFLAGS = -O3 -std=c++17 -arch=$(ARCH) -allow-unsupported-compiler -Iinclude -Xcompiler -fopenmp,-mavx2,-mfma
 NVLIBS = -lgomp
 
 COMMON = src/common/config.cpp src/common/trace.cpp src/common/timing.cpp src/common/check.cpp
