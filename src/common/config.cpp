@@ -69,9 +69,15 @@ Config load_config(const std::string& path) {
 
     // rows and pooling: one value for all tables, or one per table
     c.rows = parse_list(get("rows"), ',');
-    if (c.rows.size() == 1) c.rows.assign(c.num_tables, c.rows[0]);
+    if (c.rows.size() == 1) {
+        long long r = c.rows[0];  // copy first: assign() must not alias an element of the vector
+        c.rows.assign(c.num_tables, r);
+    }
     for (long long l : parse_list(get("pooling"), ',')) c.pooling.push_back((int)l);
-    if (c.pooling.size() == 1) c.pooling.assign(c.num_tables, c.pooling[0]);
+    if (c.pooling.size() == 1) {
+        int l = c.pooling[0];
+        c.pooling.assign(c.num_tables, l);
+    }
 
     for (long long w : parse_list(get("mlp_bot"), '-')) c.mlp_bot.push_back((int)w);
     for (long long w : parse_list(get("mlp_top"), '-')) c.mlp_top.push_back((int)w);
