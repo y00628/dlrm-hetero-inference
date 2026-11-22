@@ -25,7 +25,32 @@ NUM_DENSE = 13
 NUM_CAT = 26
 
 
+def read_parquet(path, count):
+    """Hugging Face criteo/CriteoClickLogs layout: columns label, integer_feature_1..13 (int32, nullable),
+    categorical_feature_1..26 (8-character hex strings, nullable). Reads only the first `count` rows."""
+    import pyarrow.parquet as pq
+
+    cols = [f"integer_feature_{i + 1}" for i in range(NUM_DENSE)] + [f"categorical_feature_{j + 1}" for j in range(NUM_CAT)]
+    dense = np.zeros((count, NUM_DENSE), dtype=np.float32)
+    cats = np.full((count, NUM_CAT), -1, dtype=np.int64)  # -1 = missing
+    n = 0
+    for rb in pq.ParquetFile(path).iter_batches(batch_size=65536, columns=cols):
+        take = min(rb.num_rows, count - n)
+        if take <= 0:
+            break
+        for i in range(NUM_DENSE):
+            col = rb.column(i).slice(0, take).to_pylist()
+            dense[n : n + take, i] = [0.0 if v is None else float(v) for v in col]
+        for j in range(NUM_CAT):
+            col = rb.column(NUM_DENSE + j).slice(0, take).to_pylist()
+            cats[n : n + take, j] = [-1 if v is None or v == "" else int(v, 16) for v in col]
+        n += take
+    return dense[:n], cats[:n]
+
+
 def read_lines(path, count):
+    if path.endswith(".parquet"):
+        return read_parquet(path, count)
     dense = np.zeros((count, NUM_DENSE), dtype=np.float32)
     cats = np.full((count, NUM_CAT), -1, dtype=np.int64)  # -1 = missing
     n = 0
@@ -49,7 +74,8 @@ def read_lines(path, count):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("input", help="Criteo Kaggle train.txt")
+    ap.add_argument("input", help="Criteo train.txt (tab-separated) or one .parquet part file from Hugging Face "
+                                  "criteo/CriteoClickLogs (needs pyarrow)")
     ap.add_argument("--name", default="criteo")
     ap.add_argument("--batch-size", type=int, default=2048)
     ap.add_argument("--batches", type=int, default=60)
