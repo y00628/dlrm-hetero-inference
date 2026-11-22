@@ -53,12 +53,21 @@ static vector<int> pick_cached_rows(const Config& cfg, const vector<i64>& base, 
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        printf("usage: %s <config> <cache_fraction> [hot_file]\n", argv[0]);
+        printf("usage: %s <config> <cache_fraction> [hot_file] [results.csv]\n", argv[0]);
         return 1;
     }
     Config cfg = load_config(argv[1]);
     double fraction = atof(argv[2]);
-    const char* hot_file = (argc > 3) ? argv[3] : nullptr;
+    const char* hot_file = nullptr;
+    string csv = "data/results.csv";
+    for (int a = 3; a < argc; a++) {
+        string arg = argv[a];
+        if (arg.size() >= 4 && arg.substr(arg.size() - 4) == ".csv") {
+            csv = arg;
+        } else {
+            hot_file = argv[a];
+        }
+    }
     int D = cfg.emb_dim;
     auto base = table_base(cfg);
     i64 total_rows = base[cfg.num_tables];
@@ -146,6 +155,7 @@ int main(int argc, char** argv) {
         if (i < 2) {
             string path = "data/gpu_tier_pool_" + cfg.name + "_b" + to_string(i) + "_pooled.bin";
             dump_device(d_out, (size_t)num_bags * D, path);
+            dump_device(d_out, (size_t)num_bags * D, "tier_b" + to_string(i) + "_pooled.bin");
         }
         if (i >= WARMUP_BATCHES) {
             times["cpu_gather"].push_back(cpu_ms);
@@ -166,7 +176,7 @@ int main(int argc, char** argv) {
 
     string variant = string("cache=") + argv[2];
     if (hot_file == nullptr) variant += " first-rows";
-    append_results("data/results.csv", cfg, "gpu_tier_pool", variant, 1, times);
+    append_results(csv, cfg, "gpu_tier_pool", variant, 1, times);
 
     free_flat_batches(batches);
     free(host_table);

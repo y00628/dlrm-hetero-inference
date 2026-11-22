@@ -18,11 +18,12 @@ using namespace std;
 using i64 = long long;
 
 int main(int argc, char** argv) {
-    if (argc != 2) {
-        printf("usage: %s <config>\n", argv[0]);
+    if (argc < 2 || argc > 3) {
+        printf("usage: %s <config> [results.csv]\n", argv[0]);
         return 1;
     }
     Config cfg = load_config(argv[1]);
+    string csv = (argc >= 3) ? argv[2] : "data/results.csv";
     int D = cfg.emb_dim;
     auto base = table_base(cfg);
     i64 total_rows = base[cfg.num_tables];
@@ -76,6 +77,7 @@ int main(int argc, char** argv) {
         if (i < 2) {
             string path = "data/gpu_single_" + cfg.name + "_b" + to_string(i) + "_pooled.bin";
             dump_device(d_out, (size_t)num_bags * D, path);
+            dump_device(d_out, (size_t)num_bags * D, "gpu_b" + to_string(i) + "_pooled.bin");
         }
         if (i >= WARMUP_BATCHES) {
             float lookup_ms = lookup_timer.elapsed_ms();
@@ -88,7 +90,7 @@ int main(int argc, char** argv) {
     }
 
     printf("gather bandwidth: %.1f GB/s (embedding rows read / lookup kernel time)\n", gather_bytes / gather_ms / 1e6);
-    append_results("data/results.csv", cfg, "gpu_single", "", 1, times);
+    append_results(csv, cfg, "gpu_single", "", 1, times);
 
     free_flat_batches(batches);
     cudaFree(d_table);
