@@ -1,12 +1,19 @@
 # GHC (RTX 2080): make
 # PSC (V100):     make ARCH=sm_70
 
-CXX = g++
-NVCC = nvcc
-ARCH = sm_75
+CXX ?= g++
+NVCC ?= nvcc
+ARCH ?= sm_75
+
+# On Ubuntu 24.04 (GHC), default GCC is 13; CUDA requires GCC 11 host compiler
+ifneq ($(wildcard /usr/bin/g++-11),)
+    NVCC_CCBIN ?= -ccbin /usr/bin/g++-11
+else
+    NVCC_CCBIN ?=
+endif
 
 CXXFLAGS = -O3 -std=c++17 -Wall -fopenmp -mavx2 -mfma -Iinclude
-NVCCFLAGS = -O3 -std=c++17 -arch=$(ARCH) -allow-unsupported-compiler -Iinclude -Xcompiler -fopenmp,-mavx2,-mfma
+NVCCFLAGS = -O3 -std=c++17 -arch=$(ARCH) $(NVCC_CCBIN) -Iinclude -Xcompiler -fopenmp,-mavx2,-mfma
 NVLIBS = -lgomp
 
 COMMON = src/common/config.cpp src/common/trace.cpp src/common/timing.cpp src/common/check.cpp
