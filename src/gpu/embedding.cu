@@ -12,19 +12,24 @@ vector<i64> table_base(const Config& cfg) {
     return base;
 }
 
-vector<FlatBatch> flatten_trace(const Trace& tr, const vector<i64>& base) {
+vector<FlatBatch> flatten_trace(Trace& tr, const vector<i64>& base) {
     int M = tr.num_tables;
     int B = tr.batch_size;
     vector<FlatBatch> out;
+    out.reserve(tr.batches.size());
 
-    for (const auto& batch : tr.batches) {
+    for (auto& batch : tr.batches) {
         FlatBatch fb;
         fb.num_bags = B * M;
         fb.num_lookups = 0;
         for (int t = 0; t < M; t++) fb.num_lookups += (int)batch.tables[t].indices.size();
 
-        CUDA_CHECK(cudaMallocHost(&fb.offsets, (fb.num_bags + 1) * sizeof(int)));
-        CUDA_CHECK(cudaMallocHost(&fb.rows, fb.num_lookups * sizeof(int)));
+        fb.offsets = (int*)malloc((fb.num_bags + 1) * sizeof(int));
+        fb.rows = (int*)malloc(fb.num_lookups * sizeof(int));
+        if (!fb.offsets || !fb.rows) {
+            fprintf(stderr, "failed to allocate host memory for FlatBatch\n");
+            exit(1);
+        }
 
         int pos = 0;
         for (int b = 0; b < B; b++) {
@@ -39,14 +44,19 @@ vector<FlatBatch> flatten_trace(const Trace& tr, const vector<i64>& base) {
         }
         fb.offsets[fb.num_bags] = pos;
         out.push_back(fb);
+
+        // Release batch data immediately to reduce peak memory
+        vector<float>().swap(batch.dense);
+        vector<TableBatch>().swap(batch.tables);
     }
+    tr.batches.clear();
     return out;
 }
 
 void free_flat_batches(vector<FlatBatch>& batches) {
     for (auto& fb : batches) {
-        cudaFreeHost(fb.offsets);
-        cudaFreeHost(fb.rows);
+        free(fb.offsets);
+        free(fb.rows);
     }
     batches.clear();
 }

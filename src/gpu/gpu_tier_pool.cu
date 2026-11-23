@@ -30,15 +30,24 @@ using i64 = long long;
 static vector<int> pick_cached_rows(const Config& cfg, const vector<i64>& base, i64 capacity,
                                     const char* hot_file) {
     vector<int> rows;
+    rows.reserve(capacity);
     if (hot_file != nullptr) {
         FILE* f = fopen(hot_file, "rb");
         if (!f) {
             fprintf(stderr, "cannot open %s\n", hot_file);
             exit(1);
         }
-        int pair[2];  // table, row
-        while ((i64)rows.size() < capacity && fread(pair, sizeof(int), 2, f) == 2) {
-            rows.push_back((int)(base[pair[0]] + pair[1]));
+        const size_t buf_pairs = 65536;
+        vector<int> buf(buf_pairs * 2);
+        while ((i64)rows.size() < capacity) {
+            size_t to_read = min(buf_pairs, (size_t)(capacity - rows.size()));
+            size_t n = fread(buf.data(), sizeof(int) * 2, to_read, f);
+            if (n == 0) break;
+            for (size_t i = 0; i < n; i++) {
+                int tbl = buf[i * 2];
+                int r = buf[i * 2 + 1];
+                rows.push_back((int)(base[tbl] + r));
+            }
         }
         fclose(f);
     } else {
@@ -87,14 +96,24 @@ int main(int argc, char** argv) {
     auto cached = pick_cached_rows(cfg, base, capacity, hot_file);
     i64 num_cached = cached.size();
     vector<int> remap(total_rows, -1);
-    vector<float> h_cache(max(num_cached, 1LL) * D);
-    for (i64 s = 0; s < num_cached; s++) {
-        remap[cached[s]] = (int)s;
-        memcpy(&h_cache[s * D], host_table + (i64)cached[s] * D, D * sizeof(float));
+    float* d_cache = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_cache, max(num_cached, 1LL) * D * sizeof(float)));
+
+    // Stream into d_cache in chunks to avoid allocating another 5 GB on host
+    const i64 chunk_rows = 65536;
+    vector<float> staging(chunk_rows * D);
+    for (i64 s = 0; s < num_cached; s += chunk_rows) {
+        i64 count = min(chunk_rows, num_cached - s);
+        for (i64 i = 0; i < count; i++) {
+            i64 slot = s + i;
+            int r = cached[slot];
+            remap[r] = (int)slot;
+            memcpy(&staging[i * D], host_table + (i64)r * D, D * sizeof(float));
+        }
+        CUDA_CHECK(cudaMemcpy(d_cache + s * D, staging.data(), count * D * sizeof(float), cudaMemcpyHostToDevice));
     }
-    float* d_cache;
-    CUDA_CHECK(cudaMalloc(&d_cache, h_cache.size() * sizeof(float)));
-    CUDA_CHECK(cudaMemcpy(d_cache, h_cache.data(), h_cache.size() * sizeof(float), cudaMemcpyHostToDevice));
+    vector<int>().swap(cached);
+    vector<float>().swap(staging);
     printf("tables: %.2f GB in host memory, %lld rows (%.2f GB) cached on GPU\n", total_rows * D * 4.0 / 1e9,
            num_cached, num_cached * D * 4.0 / 1e9);
 

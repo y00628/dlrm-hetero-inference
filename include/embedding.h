@@ -13,7 +13,7 @@
 std::vector<long long> table_base(const Config& cfg);
 
 // One batch flattened into a single CSR over bags. Bag k = b * M + t, so a pooled
-// output [num_bags][D] is already in [B][M][D] order. Arrays are in pinned host memory.
+// output [num_bags][D] is already in [B][M][D] order.
 struct FlatBatch {
     int num_bags;
     int num_lookups;
@@ -21,7 +21,7 @@ struct FlatBatch {
     int* rows;     // global row ids
 };
 
-std::vector<FlatBatch> flatten_trace(const Trace& tr, const std::vector<long long>& base);
+std::vector<FlatBatch> flatten_trace(Trace& tr, const std::vector<long long>& base);
 void free_flat_batches(std::vector<FlatBatch>& batches);
 
 // out[k][d] = init[k][d] (0 if init is null) + sum over i in bag k of table[rows[i]][d].
