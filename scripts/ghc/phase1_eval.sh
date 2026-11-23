@@ -7,12 +7,12 @@
 #   sizes, and check that the two tiered paths agree with each other.
 # Part 2, measurements: PCIe link info, bench_pcie, hot-row hit rates, and a cache-size sweep that runs
 #   gpu_tier_pool and gpu_tier_zerocopy at the same hot list. A comparison table (pool vs zero-copy, PCIe MB with
-#   and without CPU pooling) is written to $OUT/phase1_summary.md and copied to results/phase1/.
+#   and without CPU pooling) is written to $OUT/phase1_summary.md and copied to results/gpu/.
 #
 # Environment variables (all optional):
 #   WORK         scratch directory, off AFS (default /tmp/yosenl-data)
 #   OUT          output directory (default $WORK/phase1)
-#   REPO_OUT     where the summary and small text outputs are copied for committing (default results/phase1)
+#   REPO_OUT     where the summary and small text outputs are copied for committing (default results/gpu)
 #   CORR_CFGS    configs for part 1 (default "tiny small meta"); configs without a trace are skipped. tiny, small
 #                and medium traces are generated if missing; meta and criteo come from prepare_data.sh
 #   CORR_FRACS   cache fractions for part 1 (default "0 0.25 1.0": all cold, mixed, all hot)
@@ -30,7 +30,7 @@ cd "$(dirname "$0")/../.."
 WORK=${WORK:-/tmp/yosenl-data}
 . scripts/ghc/env.sh
 OUT=${OUT:-$WORK/phase1}
-REPO_OUT=${REPO_OUT:-results/phase1}
+REPO_OUT=${REPO_OUT:-results/gpu}
 CORR_CFGS=${CORR_CFGS:-"tiny small meta"}
 CORR_FRACS=${CORR_FRACS:-"0 0.25 1.0"}
 SWEEP_CFGS=${SWEEP_CFGS:-"small meta"}

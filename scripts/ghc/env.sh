@@ -28,7 +28,11 @@ if [ "${DATA_LINK:-1}" = 1 ]; then
         [ -e data ] || { echo "setup: data symlink was dangling, creating $(readlink data)"; mkdir -p "$(readlink data)"; }
     elif [ -d data ]; then
         echo "setup: data/ is a real directory (AFS quota!), moving it to $DATA_DIR"
-        [ -n "$(ls -A data)" ] && mv -n data/* "$DATA_DIR"/ 2> /dev/null
+        # everything in data/ is regenerable (traces, dumps, csv): move each entry, or drop the AFS copy if /tmp has one
+        for f in data/* data/.[!.]*; do
+            [ -e "$f" ] || continue
+            if [ -e "$DATA_DIR/$(basename "$f")" ]; then rm -rf "$f"; else mv "$f" "$DATA_DIR"/; fi
+        done
         if rmdir data 2> /dev/null; then
             ln -s "$DATA_DIR" data
         else

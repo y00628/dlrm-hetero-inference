@@ -1,6 +1,5 @@
 config small: M=8 total rows=8000000 (2.048 GB at D=64)
 trace: 60 batches; profiled on the first 30 (15728640 lookups), hold-out 30 batches (15728640 lookups)
-rows seen while profiling: 2712233 of 8000000 (33.9%); wrote 8000000 entries to /tmp/yosenl-data/phase1/sweep/small/hot
 
      cache  rows cached        GB hit in-sample hit hold-out
         0%            0     0.000        0.000        0.000

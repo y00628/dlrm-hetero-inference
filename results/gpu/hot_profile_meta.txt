@@ -1,6 +1,5 @@
 config meta: M=8 total rows=1681063 (0.430 GB at D=64)
 trace: 30 batches; profiled on the first 15 (7269063 lookups), hold-out 15 batches (7214661 lookups)
-rows seen while profiling: 1065059 of 1681063 (63.4%); wrote 1681063 entries to /tmp/yosenl-data/phase1/sweep/meta/hot
 
      cache  rows cached        GB hit in-sample hit hold-out
         0%            0     0.000        0.000        0.000
