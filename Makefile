@@ -3,6 +3,11 @@
 
 CXX ?= g++
 NVCC ?= nvcc
+ifeq ($(shell which $(NVCC) 2>/dev/null),)
+    ifneq ($(wildcard /usr/local/cuda/bin/nvcc),)
+        NVCC := /usr/local/cuda/bin/nvcc
+    endif
+endif
 ARCH ?= sm_75
 
 # On Ubuntu 24.04 (GHC), default GCC is 13; CUDA requires GCC 11 host compiler
@@ -21,6 +26,11 @@ GPU_COMMON = src/gpu/embedding.cu
 HEADERS = $(wildcard include/*.h)
 
 HAVE_NVCC := $(shell which $(NVCC) 2>/dev/null)
+ifeq ($(HAVE_NVCC),)
+    ifneq ($(wildcard $(NVCC)),)
+        HAVE_NVCC := $(NVCC)
+    endif
+endif
 CPU_TARGETS := bin/trace_info bin/check bin/cpu_ref bin/hot_profile
 GPU_TARGETS := bin/gpu_single bin/gpu_tier_pool bin/gpu_tier_zerocopy bin/bench_pcie
 

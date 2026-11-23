@@ -8,6 +8,11 @@
 # It also defines trace_ok <config>: true if the config's trace loads cleanly (trace_info prints OK), which is
 # stricter than "the file exists" and catches truncated files left by a full disk.
 
+if [ -d /usr/local/cuda/bin ]; then
+    export PATH="/usr/local/cuda/bin:$PATH"
+    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+fi
+
 PY=${PY:-/tmp/yosenl-venv/bin/python}
 mkdir -p /tmp/yosenl-data "${WORK:-/tmp/yosenl-data}"
 

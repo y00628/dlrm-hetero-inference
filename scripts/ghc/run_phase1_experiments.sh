@@ -6,8 +6,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+if [ -d /usr/local/cuda/bin ]; then
+    export PATH="/usr/local/cuda/bin:$PATH"
+    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+fi
+
 MODE="${1:-all}"  # "b", "c", or "all"
 PY="${PY:-python3}"
+
+echo "Building GPU binaries..."
+make gpu
 
 mkdir -p data results/gpu
 
