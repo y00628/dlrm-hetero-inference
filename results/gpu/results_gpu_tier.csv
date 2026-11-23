@@ -1,0 +1,24 @@
+impl,variant,config,gpus,B,alpha,L,D,mlp_top,stage,median_ms,p10_ms,p90_ms
+gpu_single,,small,1,2048,1,32,64,100-512-256-1,h2d,0.1737,0.1732,0.1743
+gpu_single,,small,1,2048,1,32,64,100-512-256-1,lookup,0.3043,0.3017,0.3073
+gpu_single,,small,1,2048,1,32,64,100-512-256-1,total,0.4867,0.4846,0.4896
+gpu_tier_pool,cache=1.0 first-rows,small,1,2048,1,32,64,100-512-256-1,cpu_gather,1.4839,1.4773,1.4999
+gpu_tier_pool,cache=1.0 first-rows,small,1,2048,1,32,64,100-512-256-1,h2d,0.5059,0.5047,0.5068
+gpu_tier_pool,cache=1.0 first-rows,small,1,2048,1,32,64,100-512-256-1,lookup,0.3118,0.3078,0.3156
+gpu_tier_pool,cache=1.0 first-rows,small,1,2048,1,32,64,100-512-256-1,total,2.3127,2.3065,2.3284
+gpu_tier_pool,cache=0.8 first-rows,small,1,2048,1,32,64,100-512-256-1,cpu_gather,2.4887,2.4764,2.5064
+gpu_tier_pool,cache=0.8 first-rows,small,1,2048,1,32,64,100-512-256-1,h2d,0.4753,0.4742,0.4759
+gpu_tier_pool,cache=0.8 first-rows,small,1,2048,1,32,64,100-512-256-1,lookup,0.2555,0.2532,0.2598
+gpu_tier_pool,cache=0.8 first-rows,small,1,2048,1,32,64,100-512-256-1,total,3.2327,3.2213,3.2477
+gpu_tier_pool,cache=0.5 first-rows,small,1,2048,1,32,64,100-512-256-1,cpu_gather,4.2415,4.2226,4.2624
+gpu_tier_pool,cache=0.5 first-rows,small,1,2048,1,32,64,100-512-256-1,h2d,0.4253,0.4242,0.4268
+gpu_tier_pool,cache=0.5 first-rows,small,1,2048,1,32,64,100-512-256-1,lookup,0.1682,0.1664,0.1703
+gpu_tier_pool,cache=0.5 first-rows,small,1,2048,1,32,64,100-512-256-1,total,4.8470,4.8283,4.8681
+gpu_tier_pool,cache=0.2 first-rows,small,1,2048,1,32,64,100-512-256-1,cpu_gather,5.4909,5.4753,5.5220
+gpu_tier_pool,cache=0.2 first-rows,small,1,2048,1,32,64,100-512-256-1,h2d,0.3765,0.3758,0.3774
+gpu_tier_pool,cache=0.2 first-rows,small,1,2048,1,32,64,100-512-256-1,lookup,0.0857,0.0807,0.0868
+gpu_tier_pool,cache=0.2 first-rows,small,1,2048,1,32,64,100-512-256-1,total,5.9660,5.9499,5.9932
+gpu_tier_pool,cache=0.0 first-rows,small,1,2048,1,32,64,100-512-256-1,cpu_gather,6.0509,6.0344,6.0637
+gpu_tier_pool,cache=0.0 first-rows,small,1,2048,1,32,64,100-512-256-1,h2d,0.3410,0.3401,0.3422
+gpu_tier_pool,cache=0.0 first-rows,small,1,2048,1,32,64,100-512-256-1,lookup,0.0285,0.0274,0.0295
+gpu_tier_pool,cache=0.0 first-rows,small,1,2048,1,32,64,100-512-256-1,total,6.4332,6.4150,6.4471
