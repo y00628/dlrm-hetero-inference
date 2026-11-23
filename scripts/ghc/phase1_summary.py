@@ -57,7 +57,7 @@ def main():
         if single:
             print(f"All-resident `gpu_single`: lookup {fmt(single.get('lookup'))} ms, total {fmt(single.get('total'))} ms "
                   f"per batch (embedding stage only; total includes the id copy).\n")
-        print("| cache | hit rate | pool total ms | pool cpu_gather | pool h2d | pool lookup | pool PCIe MB sent | "
+        print("| cache | hit rate | pool total ms | pool cpu_gather | pool h2d | pool lookup | pool H2D payload MB | "
               "cold rows as raw MB | zc total ms | zc lookup ms | zc PCIe MB | zc GB/s | faster |")
         print("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:--|")
         for f in fracs:
@@ -65,6 +65,10 @@ def main():
             zc = res.get(("gpu_tier_zerocopy", f"cache={f}"), {})
             hit = grep(os.path.join(d, f"pool_{f}.log"), r"hit rate ([0-9.]+)")
             pcie = grep(os.path.join(d, f"pool_{f}.log"), r"PCIe per batch: ([0-9.]+) MB sent \(cold rows unpooled would be ([0-9.]+) MB\)")
+            if not pcie:  # New explicit payload labels; retain compatibility with old logs.
+                total = grep(os.path.join(d, f"pool_{f}.log"), r"H2D payload per batch: ([0-9.]+) MB total")
+                cold = grep(os.path.join(d, f"pool_{f}.log"), r"Unpooled cold-vector payload per batch: ([0-9.]+) MB")
+                pcie = (total[0], cold[0]) if total and cold else None
             zrate = grep(os.path.join(d, f"zc_{f}.log"), r"zero-copy reads per batch: ([0-9.]+) MB; effective rate ([0-9.]+) GB/s")
             pt, zt = pool.get("total"), zc.get("total")
             faster = "-"
@@ -75,9 +79,9 @@ def main():
                   f"{pcie[1] if pcie else '-'} | {fmt(zt)} | {fmt(zc.get('lookup'))} | "
                   f"{zrate[0] if zrate else '-'} | {zrate[1] if zrate else '-'} | {faster} |")
         print()
-        print("Notes: times are medians per batch over 50 batches after 5 warm-up batches. `pool PCIe MB sent` is what "
-              "crosses PCIe with CPU partial pooling (ids, hot slots and one partial sum per bag); `cold rows as raw MB` is what "
-              "would cross without pooling, i.e. what zero-copy reads. The hot list is ranked on the first half of the trace and "
+        print("Notes: times are medians per batch over 50 batches after 5 warm-up batches. `pool H2D payload MB` is what "
+              "is calculated from copy sizes (hot slots, offsets and one partial sum per bag); `cold rows as raw MB` is the "
+              "logical cold-vector payload, excluding metadata and cache effects, not measured bus traffic. The hot list is ranked on the first half of the trace and "
               "the runs cycle through all batches, so the hit rate is slightly optimistic (see hot_profile output for the "
               "hold-out rate).\n")
     return 0

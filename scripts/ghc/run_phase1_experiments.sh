@@ -25,132 +25,111 @@ make gpu
 
 mkdir -p data results/gpu
 
-# -----------------------------------------------------------------------------
-# Part B: Skew x Cache fraction sweep on small.cfg
-# -----------------------------------------------------------------------------
-run_part_b() {
-    echo "=========================================================================="
-    echo "Starting Part B: Skew (alpha) x Cache Size Sweep on small.cfg"
-    echo "=========================================================================="
-    local res_csv="results/gpu/results_part_b.csv"
-    rm -f "$res_csv"
+# Every invocation has separate logs; aggregate CSVs are append-only.
+RUN_DIR=$(mktemp -d results/gpu/phase1_run_$(date +%Y%m%d_%H%M%S)_XXXXXX)
+printf 'label,exit_code,status,log\n' > "$RUN_DIR/status.csv"
+failures=0
 
-    local alphas=(0 0.6 1.0 1.2)
-    local caches=(0.0 0.01 0.05 0.1 0.25 0.5 1.0)
+diagnostics() {
+    echo "--- diagnostics $(date -u) ---"
+    echo "virtual memory soft/hard (KB): $(ulimit -Sv) / $(ulimit -Hv)"
+    echo "locked memory soft/hard (KB): $(ulimit -Sl) / $(ulimit -Hl)"
+    free -h || true
+    nvidia-smi || true
+    cat /proc/$$/limits 2>/dev/null || true
+}
+diagnostics > "$RUN_DIR/environment.log" 2>&1
+echo "Run logs: $RUN_DIR (existing CSVs preserved; repeated points are appended)"
 
-    for a in "${alphas[@]}"; do
-        local cfg="data/small_a${a}.cfg"
-        local tr_main="data/small_a${a}.trace"
-        local tr_prof="data/small_a${a}_prof.trace"
-        local hot_bin="data/small_a${a}_hot.bin"
-
-        echo "--- [Part B] Preparing Alpha = $a ---"
-        # Generate temporary config for this alpha
-        sed -E "s/^zipf_alpha[[:space:]]*=.*/zipf_alpha = $a/; s|^trace_file[[:space:]]*=.*|trace_file = $tr_main|" configs/small.cfg > "$cfg"
-
-        # 1. Generate main trace (if missing)
-        if [ ! -f "$tr_main" ]; then
-            echo "  Generating main trace: $tr_main"
-            "$PY" tools/gen_trace.py "$cfg" --out "$tr_main"
+# Conditional pipeline avoids errexit; inspect both producer and tee exit codes.
+run_logged() {
+    local label="$1" expected="$2"
+    shift 2
+    local log="$RUN_DIR/$label.log" rc status
+    local codes
+    if "$@" 2>&1 | tee "$log"; then
+        codes=("${PIPESTATUS[@]}")
+    else
+        codes=("${PIPESTATUS[@]}")
+    fi
+    rc=${codes[0]}
+    status=PASS
+    if [ "${codes[1]}" -ne 0 ]; then
+        status=LOG_FAILED
+    elif [ "$rc" -ne 0 ]; then
+        status=FAILED
+        if grep -Eiq '(CUDA error.*out of memory|CUDA cache allocation failed: out of memory)' "$log"; then
+            status=OOM
+            [ "$expected" != oom ] || status=EXPECTED_OOM
         fi
-
-        # 2. Generate profiling trace with different seed
-        if [ ! -f "$tr_prof" ]; then
-            echo "  Generating profiling trace: $tr_prof"
-            "$PY" tools/gen_trace.py "$cfg" --seed 1001 --out "$tr_prof"
-        fi
-
-        # 3. Generate hot file from profiling trace
-        if [ ! -f "$hot_bin" ]; then
-            echo "  Profiling hot rows -> $hot_bin"
-            "$PY" tools/profile_hot.py "$tr_prof" --out "$hot_bin"
-        fi
-
-        # 4. Sweep cache fractions
-        for c in "${caches[@]}"; do
-            echo "  Running: alpha=$a, cache=$c"
-            ./bin/gpu_tier_pool "$cfg" "$c" "$hot_bin" "$res_csv"
-        done
-    done
-    echo "Part B completed! Results saved to $res_csv"
+    elif [ "$expected" = oom ]; then
+        status=BASELINE_FITS
+    fi
+    printf '%s,%s,%s,%s\n' "$label" "$rc" "$status" "$log" >> "$RUN_DIR/status.csv"
+    echo ">>> $label: $status (exit $rc)"
+    case "$status" in
+        PASS|EXPECTED_OOM|BASELINE_FITS) return 0 ;;
+        *)
+            failures=$((failures + 1))
+            diagnostics > "$RUN_DIR/$label.diagnostics.log" 2>&1
+            return 1 ;;
+    esac
 }
 
-# -----------------------------------------------------------------------------
-# Part C: Out-of-Core Tiering on medium.cfg (10 GB table)
-# -----------------------------------------------------------------------------
-run_part_c() {
-    echo "=========================================================================="
-    echo "Starting Part C: Out-of-Core Memory Tiering on medium.cfg (10 GB)"
-    echo "=========================================================================="
-    local res_csv="results/gpu/results_part_c.csv"
-    rm -f "$res_csv"
-
-    echo "Checking Host Memory:"
-    free -h || true
-
-    # Step 1: Prove gpu_single fails with OOM
-    echo "--- Testing gpu_single on medium.cfg (Expected: OOM) ---"
-    # Ensure baseline medium trace exists
-    if [ ! -f "data/medium.trace" ]; then
-        "$PY" tools/gen_trace.py configs/medium.cfg
-    fi
-    set +e
-    ./bin/gpu_single configs/medium.cfg "$res_csv" 2>&1 | tee results/gpu/medium_oom_log.txt
-    local ret=$?
-    set -e
-    if [ $ret -ne 0 ]; then
-        echo ">>> Verified: gpu_single crashed with OOM as expected! Logged to results/gpu/medium_oom_log.txt"
+# Publish generated files only after success; failed generation cannot leave a
+# partial trace/hot file that the next invocation mistakes for complete input.
+ensure_generated() {
+    local label="$1" target="$2"
+    shift 2
+    [ ! -s "$target" ] || return 0
+    local tmp="$target.pending.$$.tmp"
+    if run_logged "$label" normal "$@" --out "$tmp"; then
+        mv "$tmp" "$target"
     else
-        echo ">>> Note: gpu_single unexpectedly succeeded (GPU VRAM > 10GB?)"
+        return 1
     fi
+}
 
-    # Step 2: Test gpu_tier_pool across alphas and caches
-    local alphas=(0.6 1.0 1.2)
-    local caches=(0.05 0.1 0.25 0.5)
-
+run_part() {
+    local part="$1" model="$2"
+    shift 2
+    local res_csv="results/gpu/results_part_${part}.csv"
+    local a c cfg tr_main tr_prof hot_bin
+    local alphas caches
+    if [ "$part" = b ]; then
+        alphas=(0 0.6 1.0 1.2)
+        caches=(0.0 0.01 0.05 0.1 0.25 0.5 1.0)
+    else
+        alphas=(0.6 1.0 1.2)
+        caches=(0.05 0.1 0.25 0.5)
+        if ensure_generated medium_trace data/medium.trace "$PY" tools/gen_trace.py configs/medium.cfg; then
+            run_logged medium_baseline oom ./bin/gpu_single configs/medium.cfg "$res_csv" || true
+        fi
+    fi
+    echo "Starting Part $part: $model; appending to $res_csv"
     for a in "${alphas[@]}"; do
-        local cfg="data/medium_a${a}.cfg"
-        local tr_main="data/medium_a${a}.trace"
-        local tr_prof="data/medium_a${a}_prof.trace"
-        local hot_bin="data/medium_a${a}_hot.bin"
-
-        echo "--- [Part C] Preparing Alpha = $a ---"
-        sed -E "s/^zipf_alpha[[:space:]]*=.*/zipf_alpha = $a/; s|^trace_file[[:space:]]*=.*|trace_file = $tr_main|" configs/medium.cfg > "$cfg"
-
-        if [ ! -f "$tr_main" ]; then
-            echo "  Generating main trace: $tr_main"
-            "$PY" tools/gen_trace.py "$cfg" --out "$tr_main"
-        fi
-        if [ ! -f "$tr_prof" ]; then
-            echo "  Generating profiling trace: $tr_prof"
-            "$PY" tools/gen_trace.py "$cfg" --seed 1001 --out "$tr_prof"
-        fi
-        if [ ! -f "$hot_bin" ]; then
-            echo "  Profiling hot rows -> $hot_bin"
-            "$PY" tools/profile_hot.py "$tr_prof" --out "$hot_bin"
-        fi
-
+        cfg="data/${model}_a${a}.cfg"
+        tr_main="data/${model}_a${a}.trace"
+        tr_prof="data/${model}_a${a}_prof.trace"
+        hot_bin="data/${model}_a${a}_hot.bin"
+        sed -E "s/^zipf_alpha[[:space:]]*=.*/zipf_alpha = $a/; s|^trace_file[[:space:]]*=.*|trace_file = $tr_main|" "configs/$model.cfg" > "$cfg"
+        ensure_generated "${model}_${a}_main" "$tr_main" "$PY" tools/gen_trace.py "$cfg" || continue
+        ensure_generated "${model}_${a}_profile" "$tr_prof" "$PY" tools/gen_trace.py "$cfg" --seed 1001 || continue
+        ensure_generated "${model}_${a}_hot" "$hot_bin" "$PY" tools/profile_hot.py "$tr_prof" || continue
         for c in "${caches[@]}"; do
-            echo "  Running medium: alpha=$a, cache=$c"
-            ./bin/gpu_tier_pool "$cfg" "$c" "$hot_bin" "$res_csv"
+            run_logged "${model}_a${a}_cache${c}" normal ./bin/gpu_tier_pool "$cfg" "$c" "$hot_bin" "$res_csv" || true
         done
     done
-    echo "Part C completed! Results saved to $res_csv"
+    echo "Part $part sweep finished; see $RUN_DIR/status.csv for failures."
 }
 
 case "$MODE" in
-    b|B)
-        run_part_b
-        ;;
-    c|C)
-        run_part_c
-        ;;
-    all|ALL)
-        run_part_b
-        run_part_c
-        ;;
-    *)
-        echo "Usage: $0 [b|c|all]"
-        exit 1
-        ;;
+    b|B) run_part b small ;;
+    c|C) run_part c medium ;;
+    all|ALL) run_part b small; run_part c medium ;;
+    *) echo "Usage: $0 [b|c|all]"; exit 1 ;;
 esac
+
+echo "Finished: $failures unexpected failures; logs: $RUN_DIR"
+# Report failure to automation only AFTER all configurations have been attempted.
+[ "$failures" -eq 0 ]

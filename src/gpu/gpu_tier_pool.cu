@@ -104,7 +104,23 @@ int main(int argc, char** argv) {
            num_cached * D * 4.0 / 1e9);
 
     float* d_cache = nullptr;
-    CUDA_CHECK(cudaMalloc(&d_cache, max(num_cached, 1LL) * D * sizeof(float)));
+    fflush(stdout);
+    cudaError_t cache_err = cudaMalloc(&d_cache, max(num_cached, 1LL) * D * sizeof(float));
+    if (cache_err != cudaSuccess) {
+        fprintf(stderr, "CUDA cache allocation failed: %s; requested %.2f GB, previously free %.2f GB\n",
+                cudaGetErrorString(cache_err), num_cached * D * 4.0 / 1e9, gpu_free / 1e9);
+        // Read this process, not the parent shell: CUDA mappings consume address space.
+        for (const char* path : {"/proc/self/status", "/proc/self/limits"}) {
+            fprintf(stderr, "--- %s ---\n", path);
+            FILE* f = fopen(path, "r");
+            if (!f) { fprintf(stderr, "unavailable\n"); continue; }
+            char line[1024];
+            while (fgets(line, sizeof(line), f)) fputs(line, stderr);
+            fclose(f);
+        }
+        fprintf(stderr, "Check address-space limits as well as GPU availability; free VRAM alone does not establish the cause.\n");
+        return 1;
+    }
 
     // Stream into d_cache in chunks to avoid allocating another 5 GB on host
     const i64 chunk_rows = 65536;
@@ -197,8 +213,12 @@ int main(int argc, char** argv) {
     double hit_rate = (double)hot_total / (hot_total + cold_total);
     double raw_cold_mb = (double)cold_total * D * 4.0 / TIMED_BATCHES / 1e6;
     printf("hit rate %.3f, cold rows per batch %.0f\n", hit_rate, (double)cold_total / TIMED_BATCHES);
-    printf("PCIe per batch: %.2f MB sent (cold rows unpooled would be %.2f MB)\n", pcie_bytes / TIMED_BATCHES / 1e6,
-           raw_cold_mb);
+    double partial_mb = (double)num_bags * D * sizeof(float) / 1e6;
+    double metadata_mb = ((double)num_bags + 1 + (double)hot_total / TIMED_BATCHES) * sizeof(int) / 1e6;
+    printf("H2D payload per batch: %.2f MB total; %.2f MB cold partial sums; %.2f MB hot IDs + offsets\n",
+           pcie_bytes / TIMED_BATCHES / 1e6, partial_mb, metadata_mb);
+    printf("Unpooled cold-vector payload per batch: %.2f MB (metadata excluded)\n", raw_cold_mb);
+    printf("Payloads are calculated buffer bytes, not measured PCIe bus traffic. Partial sums include zero vectors for all-hot bags.\n");
 
     string variant = string("cache=") + argv[2];
     if (hot_file == nullptr) variant += " first-rows";
