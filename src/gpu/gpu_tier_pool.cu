@@ -96,6 +96,13 @@ int main(int argc, char** argv) {
     auto cached = pick_cached_rows(cfg, base, capacity, hot_file);
     i64 num_cached = cached.size();
     vector<int> remap(total_rows, -1);
+
+    // GHC GPUs are shared: other users' processes can hold GPU memory
+    size_t gpu_free, gpu_total;
+    CUDA_CHECK(cudaMemGetInfo(&gpu_free, &gpu_total));
+    printf("GPU memory: %.2f GB free of %.2f GB, cache needs %.2f GB\n", gpu_free / 1e9, gpu_total / 1e9,
+           num_cached * D * 4.0 / 1e9);
+
     float* d_cache = nullptr;
     CUDA_CHECK(cudaMalloc(&d_cache, max(num_cached, 1LL) * D * sizeof(float)));
 

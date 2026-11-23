@@ -33,7 +33,7 @@ def per_table(value, num_tables):
     return vals * num_tables if len(vals) == 1 else vals
 
 
-def sample_rows(rng, n, alpha, count, seed, table):
+def sample_rows(rng, n, alpha, count, table):
     # popularity rank in [0, n), rank 0 is the hottest
     if alpha == 0:
         ranks = rng.integers(0, n, size=count)
@@ -42,11 +42,12 @@ def sample_rows(rng, n, alpha, count, seed, table):
         cdf /= cdf[-1]
         ranks = np.minimum(np.searchsorted(cdf, rng.random(count)), n - 1)
 
-    # rank -> row ID with a fixed bijection per table
+    # rank -> row ID with a fixed bijection per table. It must not depend on the seed:
+    # a profiling trace (different seed) has to find the same hot rows as the main trace.
     a = 2654435761 % n
     while math.gcd(a, n) != 1:
         a += 1
-    c = (seed * 7919 + table * 104729) % n
+    c = (table * 104729 + 12345) % n
     rows = (ranks.astype(np.uint64) * np.uint64(a) + np.uint64(c)) % np.uint64(n)
     return rows.astype(np.int32)
 
@@ -72,7 +73,7 @@ def main():
     rng = np.random.default_rng(seed)
     indices = []  # indices[t] has shape [num_batches, B * L]
     for t in range(M):
-        idx = sample_rows(rng, rows[t], alpha, num_batches * B * pooling[t], seed, t)
+        idx = sample_rows(rng, rows[t], alpha, num_batches * B * pooling[t], t)
         indices.append(idx.reshape(num_batches, B * pooling[t]))
     dense = rng.random((num_batches, B, num_dense), dtype=np.float32)
 
