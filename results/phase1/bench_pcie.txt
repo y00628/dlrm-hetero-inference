@@ -1,0 +1,15 @@
+======================================================================
+PCIe & Memory Bandwidth Microbenchmark
+Device: NVIDIA GeForce RTX 2080 (SM 7.5, 8.4 GB VRAM)
+Buffer size: 256 MB (20 iterations per test)
+======================================================================
+
+| Transfer Mode                        | Measured Bandwidth | Latency per 256 MB |
+|:-------------------------------------|-------------------:|--------------------:|
+| GPU VRAM Read/Write (Coalesced)      |          394.24 GB/s |            1.36 ms |
+| PCIe Pageable Host-to-Device (H2D)   |           10.17 GB/s |           26.39 ms |
+| PCIe Pinned Host-to-Device (H2D)     |           12.77 GB/s |           21.02 ms |
+| PCIe Zero-Copy GPU Kernel Read       |           12.78 GB/s |           21.00 ms |
+======================================================================
+Ratio r = BW_VRAM / BW_PCIe_Pinned: 30.86x
+======================================================================

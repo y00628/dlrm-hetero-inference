@@ -1,0 +1,2 @@
+NVIDIA GeForce RTX 2080, 3, 16
+link gen seen during bench_pcie: 3 (x16); max supported: NVIDIA GeForce RTX 2080, 3, 16

@@ -17,16 +17,24 @@ def write_trace(path, dense, offsets, indices):
     M = len(offsets)
     assert len(indices) == M
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "wb") as f:
-        f.write(np.array([M, B, nb, nd], dtype=np.int32).tobytes())
-        for k in range(nb):
-            f.write(np.ascontiguousarray(dense[k], dtype=np.float32).tobytes())
-            for t in range(M):
-                off = np.ascontiguousarray(offsets[t][k], dtype=np.int32)
-                idx = np.ascontiguousarray(indices[t][k], dtype=np.int32)
-                assert off.shape == (B + 1,) and off[0] == 0 and off[B] == len(idx), (t, k)
-                f.write(off.tobytes())
-                f.write(idx.tobytes())
+    # write to a temporary file and rename, so a full disk or a crash never leaves a truncated trace under `path`
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "wb") as f:
+            f.write(np.array([M, B, nb, nd], dtype=np.int32).tobytes())
+            for k in range(nb):
+                f.write(np.ascontiguousarray(dense[k], dtype=np.float32).tobytes())
+                for t in range(M):
+                    off = np.ascontiguousarray(offsets[t][k], dtype=np.int32)
+                    idx = np.ascontiguousarray(indices[t][k], dtype=np.int32)
+                    assert off.shape == (B + 1,) and off[0] == 0 and off[B] == len(idx), (t, k)
+                    f.write(off.tobytes())
+                    f.write(idx.tobytes())
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
     print(f"wrote {path} ({os.path.getsize(path) / 1e6:.1f} MB)")
 
 

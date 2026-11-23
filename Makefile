@@ -21,8 +21,8 @@ GPU_COMMON = src/gpu/embedding.cu
 HEADERS = $(wildcard include/*.h)
 
 HAVE_NVCC := $(shell which $(NVCC) 2>/dev/null)
-CPU_TARGETS := bin/trace_info bin/check bin/cpu_ref
-GPU_TARGETS := bin/gpu_single bin/gpu_tier_pool bin/bench_pcie
+CPU_TARGETS := bin/trace_info bin/check bin/cpu_ref bin/hot_profile
+GPU_TARGETS := bin/gpu_single bin/gpu_tier_pool bin/gpu_tier_zerocopy bin/bench_pcie
 
 ifeq ($(HAVE_NVCC),)
 all: $(CPU_TARGETS)
@@ -41,6 +41,10 @@ bin/trace_info: src/tools/trace_info.cpp $(COMMON) $(HEADERS)
 	mkdir -p bin
 	$(CXX) $(CXXFLAGS) src/tools/trace_info.cpp $(COMMON) -o $@
 
+bin/hot_profile: src/tools/hot_profile.cpp $(COMMON) $(HEADERS)
+	mkdir -p bin
+	$(CXX) $(CXXFLAGS) src/tools/hot_profile.cpp $(COMMON) -o $@
+
 bin/check: src/tools/check.cpp $(COMMON) $(HEADERS)
 	mkdir -p bin
 	$(CXX) $(CXXFLAGS) src/tools/check.cpp $(COMMON) -o $@
@@ -52,6 +56,10 @@ bin/gpu_single: src/gpu/gpu_single.cu $(GPU_COMMON) $(COMMON) $(HEADERS)
 bin/gpu_tier_pool: src/gpu/gpu_tier_pool.cu src/cpu/cold_pool.cpp $(GPU_COMMON) $(COMMON) $(HEADERS)
 	mkdir -p bin
 	$(NVCC) $(NVCCFLAGS) src/gpu/gpu_tier_pool.cu src/cpu/cold_pool.cpp $(GPU_COMMON) $(COMMON) -o $@ $(NVLIBS)
+
+bin/gpu_tier_zerocopy: src/gpu/gpu_tier_zerocopy.cu $(GPU_COMMON) $(COMMON) $(HEADERS)
+	mkdir -p bin
+	$(NVCC) $(NVCCFLAGS) src/gpu/gpu_tier_zerocopy.cu $(GPU_COMMON) $(COMMON) -o $@ $(NVLIBS)
 
 bin/bench_pcie: src/tools/bench_pcie.cu
 	mkdir -p bin
