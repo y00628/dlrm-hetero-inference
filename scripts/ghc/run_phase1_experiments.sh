@@ -12,6 +12,12 @@ if [ -d /usr/local/cuda/bin ]; then
 fi
 
 MODE="${1:-all}"  # "b", "c", or "all"
+
+# GHC sets a 16 GiB virtual-memory limit per process (ulimit -v). CUDA maps GPU allocations
+# into the process address space, so 10 GB host table + GPU cache can exceed it.
+# Raise the soft limit up to the hard limit (no effect if the hard limit is also 16 GiB).
+ulimit -v "$(ulimit -Hv)" 2>/dev/null || true
+echo "virtual memory limit: $(ulimit -v) KB"
 PY="${PY:-python3}"
 
 echo "Building GPU binaries..."
