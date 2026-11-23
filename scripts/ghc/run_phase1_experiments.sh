@@ -23,7 +23,31 @@ PY="${PY:-python3}"
 echo "Building GPU binaries..."
 make gpu
 
-mkdir -p data results/gpu
+# GHC scratch directories may disappear after /tmp cleanup or a host change.
+# Preserve data itself and all existing files; repair only a missing link target.
+if [ -L data ]; then
+    if [ ! -e data ]; then
+        data_target=$(readlink data)
+        echo "Repairing dangling data symlink: data -> $data_target"
+        # data is in the repository root, so relative targets resolve from here.
+        if ! mkdir -p -- "$data_target"; then
+            echo "ERROR: cannot recreate data target '$data_target'; symlink left unchanged." >&2
+            exit 1
+        fi
+    fi
+    if [ ! -d data ]; then
+        echo "ERROR: data symlink does not resolve to a directory; left unchanged." >&2
+        exit 1
+    fi
+elif [ -e data ]; then
+    if [ ! -d data ]; then
+        echo "ERROR: data exists but is not a directory; left unchanged." >&2
+        exit 1
+    fi
+else
+    mkdir -p data
+fi
+mkdir -p results/gpu
 
 # Every invocation has separate logs; aggregate CSVs are append-only.
 RUN_DIR=$(mktemp -d results/gpu/phase1_run_$(date +%Y%m%d_%H%M%S)_XXXXXX)
