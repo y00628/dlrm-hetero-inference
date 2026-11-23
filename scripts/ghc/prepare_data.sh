@@ -14,6 +14,7 @@
 
 set -u
 cd "$(dirname "$0")/../.."
+WORK=${WORK:-/tmp/yosenl-data}   # logs only; the caller's WORK may be a subdirectory and is not exported
 . scripts/ghc/env.sh
 
 META_RAW=${META_RAW:-/tmp/yosenl-data/meta/fbgemm_t856_bs65536_0.pt.gz}
