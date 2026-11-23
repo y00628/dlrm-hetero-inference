@@ -31,6 +31,10 @@ POOLING=${POOLING:-"1 4 16 64"}
 ALPHAS=${ALPHAS:-"0 0.5 1.0"}
 SWEEP_BATCHES=${SWEEP_BATCHES:-20}
 
+. scripts/ghc/env.sh
+# rebuild missing real-data traces (set PREPARE=0 to skip); only when meta/criteo are in TAGS
+case "$TAGS" in *meta*|*criteo*) [ "${PREPARE:-1}" = 1 ] && scripts/ghc/prepare_data.sh ;; esac
+
 RES=$WORK/results
 CFG=$WORK/cfg
 TR=$WORK/traces

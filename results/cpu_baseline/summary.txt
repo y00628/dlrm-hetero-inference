@@ -1,0 +1,61 @@
+cpu_ref results (median ms per batch; throughput = batch size / total)
+
+[alpha0]  B=2048  L(first table)=32  alpha=0  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      20.41      100346    1.00x           6.01         7.86         6.53
+  stage share at 8 threads: dense_bot 29%, lookup 39%, interact_top 32%
+
+[alpha0.5]  B=2048  L(first table)=32  alpha=0.5  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      20.45      100153    1.00x           6.02         7.90         6.51
+  stage share at 8 threads: dense_bot 29%, lookup 39%, interact_top 32%
+
+[alpha1.0]  B=2048  L(first table)=32  alpha=1  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      18.08      113289    1.00x           5.97         5.60         6.49
+  stage share at 8 threads: dense_bot 33%, lookup 31%, interact_top 36%
+
+[criteo]  B=2048  L(first table)=1  alpha=0  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        1     115.98       17659    1.00x          36.11         2.19        77.57
+        2      59.52       34409    1.95x          18.35         1.42        39.72
+        4      32.56       62903    3.56x           9.81         1.21        21.53
+        8      19.88      102997    5.83x           5.92         1.11        12.85
+  stage share at 8 threads: dense_bot 30%, lookup 6%, interact_top 65%
+
+[meta]  B=2048  L(first table)=27  alpha=0  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        1      97.29       21051    1.00x          36.85        19.99        40.40
+        2      50.94       40203    1.91x          18.70        11.73        20.49
+        4      27.65       74075    3.52x           9.83         7.03        10.80
+        8      17.19      119142    5.66x           5.84         4.94         6.46
+  stage share at 8 threads: dense_bot 34%, lookup 29%, interact_top 38%
+
+[pool1]  B=2048  L(first table)=1  alpha=1  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      12.84      159543    1.00x           5.88         0.49         6.50
+  stage share at 8 threads: dense_bot 46%, lookup 4%, interact_top 51%
+
+[pool16]  B=2048  L(first table)=16  alpha=1  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      15.64      130937    1.00x           5.94         3.14         6.54
+  stage share at 8 threads: dense_bot 38%, lookup 20%, interact_top 42%
+
+[pool4]  B=2048  L(first table)=4  alpha=1  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      13.57      150947    1.00x           5.92         1.11         6.52
+  stage share at 8 threads: dense_bot 44%, lookup 8%, interact_top 48%
+
+[pool64]  B=2048  L(first table)=64  alpha=1  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        8      22.54       90859    1.00x           5.94        10.09         6.51
+  stage share at 8 threads: dense_bot 26%, lookup 45%, interact_top 29%
+
+[small]  B=2048  L(first table)=32  alpha=1  D=64
+  threads   total ms   samples/s  speedup      dense_bot       lookup interact_top
+        1     103.15       19855    1.00x          36.55        26.30        40.31
+        2      55.07       37186    1.87x          19.14        14.78        21.08
+        4      29.35       69769    3.51x           9.90         8.55        10.89
+        8      17.79      115127    5.80x           5.86         5.49         6.45
+  stage share at 8 threads: dense_bot 33%, lookup 31%, interact_top 36%
+
