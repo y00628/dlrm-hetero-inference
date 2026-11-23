@@ -21,9 +21,12 @@ WORK=${WORK:-/tmp/yosenl-data/verify}
 NCPU=$( (nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null) || echo 4)
 THREADS=${THREADS:-$NCPU}
 CXXFLAGS_OVERRIDE=${CXXFLAGS_OVERRIDE:-}
-EXTRA_CFGS=${EXTRA_CFGS:-"configs/meta.cfg configs/criteo.cfg"}
+EXTRA_CFGS=${EXTRA_CFGS-"configs/meta.cfg configs/criteo.cfg"}   # EXTRA_CFGS="" now really means none
 
+. scripts/ghc/env.sh
 mkdir -p "$WORK"
+# rebuild missing real-data traces (set PREPARE=0 to skip); only when meta/criteo are among the configs to check
+case "$EXTRA_CFGS" in *meta*|*criteo*) [ "${PREPARE:-1}" = 1 ] && scripts/ghc/prepare_data.sh ;; esac
 pass=0
 fail=0
 ok()  { echo "PASS: $1"; pass=$((pass + 1)); }
@@ -69,7 +72,7 @@ echo "   compiler warnings: $warns"
 
 echo "== 3. traces and trace_info"
 for c in tiny small; do
-    [ -f "data/$c.trace" ] || "$PY" tools/gen_trace.py "configs/$c.cfg" > /dev/null 2>&1
+    [ -f "data/$c.trace" ] || "$PY" tools/gen_trace.py "configs/$c.cfg" > "$WORK/gen_$c.log" 2>&1 || { echo "   gen_trace $c failed:"; tail -3 "$WORK/gen_$c.log"; }
     if ./bin/trace_info "configs/$c.cfg" | tail -1 | grep -q '^OK$'; then ok "trace_info $c"; else bad "trace_info $c"; fi
 done
 for c in $EXTRA_CFGS; do
