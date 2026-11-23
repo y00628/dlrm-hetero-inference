@@ -1,8 +1,12 @@
 # Shared setup for scripts/ghc/*.sh. Source it from the repo root; do not run it directly.
-# Safe to run repeatedly. /tmp on GHC is per-host and gets cleaned, so this rebuilds what is missing:
-#   - the python venv (numpy, pyarrow) at the directory containing $PY
-#   - the scratch directory /tmp/yosenl-data and $WORK
-#   - the data/ directory, or the target of a dangling data -> /tmp/... symlink
+# Safe to run repeatedly. /tmp on GHC is per-host and gets cleaned, and the AFS home has a small quota, so this:
+#   - recreates the python venv (numpy, pyarrow) at the directory containing $PY if it is missing
+#   - creates the scratch directory /tmp/yosenl-data and $WORK
+#   - keeps data/ (traces, dumps, results.csv) OFF AFS: data/ becomes a symlink to $DATA_DIR (default
+#     /tmp/yosenl-data/traces). An existing real data/ directory is moved there, a dangling symlink is repaired.
+#     Set DATA_LINK=0 to leave data/ alone.
+# It also defines trace_ok <config>: true if the config's trace loads cleanly (trace_info prints OK), which is
+# stricter than "the file exists" and catches truncated files left by a full disk.
 
 PY=${PY:-/tmp/yosenl-venv/bin/python}
 mkdir -p /tmp/yosenl-data "${WORK:-/tmp/yosenl-data}"
@@ -17,9 +21,34 @@ if [ ! -x "$PY" ]; then
     fi
 fi
 
-if [ -L data ] && [ ! -e data ]; then
-    echo "setup: data symlink was dangling, creating $(readlink data)"
-    mkdir -p "$(readlink data)"
+if [ "${DATA_LINK:-1}" = 1 ]; then
+    DATA_DIR=${DATA_DIR:-/tmp/yosenl-data/traces}
+    mkdir -p "$DATA_DIR"
+    if [ -L data ]; then
+        [ -e data ] || { echo "setup: data symlink was dangling, creating $(readlink data)"; mkdir -p "$(readlink data)"; }
+    elif [ -d data ]; then
+        echo "setup: data/ is a real directory (AFS quota!), moving it to $DATA_DIR"
+        [ -n "$(ls -A data)" ] && mv -n data/* "$DATA_DIR"/ 2> /dev/null
+        if rmdir data 2> /dev/null; then
+            ln -s "$DATA_DIR" data
+        else
+            echo "setup: WARNING data/ could not be moved completely, it stays on AFS"
+        fi
+    elif [ ! -e data ]; then
+        ln -s "$DATA_DIR" data
+    fi
 elif [ ! -e data ]; then
     mkdir -p data
 fi
+
+# trace_ok <config>: the trace named in the config exists and loads (needs bin/trace_info, falls back to file exists)
+trace_ok() {
+    local tf
+    tf=$(sed -n 's/^trace_file[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p' "$1")
+    [ -n "$tf" ] && [ -s "$tf" ] || return 1
+    if [ -x bin/trace_info ]; then
+        bin/trace_info "$1" 2> /dev/null | tail -1 | grep -q '^OK$'
+    else
+        return 0
+    fi
+}

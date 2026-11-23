@@ -1,0 +1,14 @@
+config small: M=8 total rows=8000000 (2.048 GB at D=64)
+trace: 60 batches; profiled on the first 30 (15728640 lookups), hold-out 30 batches (15728640 lookups)
+rows seen while profiling: 2712233 of 8000000 (33.9%); wrote 8000000 entries to /tmp/yosenl-data/phase1/sweep/small/hot
+
+     cache  rows cached        GB hit in-sample hit hold-out
+        0%            0     0.000        0.000        0.000
+        1%        80000     0.020        0.682        0.677
+        5%       400000     0.102        0.804        0.779
+       10%       800000     0.205        0.864        0.816
+       25%      2000000     0.512        0.955        0.867
+       50%      4000000     1.024        1.000        0.919
+      100%      8000000     2.048        1.000        1.000
+
+(a cache larger than the file holds only the listed rows, same as gpu_tier_pool would load it)

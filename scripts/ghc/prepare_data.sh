@@ -25,8 +25,8 @@ CRITEO_URL="https://huggingface.co/datasets/criteo/CriteoClickLogs/resolve/main/
 echo "== prepare data"
 
 # Criteo
-if [ -f data/criteo.trace ] && [ -f configs/criteo.cfg ]; then
-    echo "  criteo: trace present"
+if [ -f configs/criteo.cfg ] && trace_ok configs/criteo.cfg; then
+    echo "  criteo: trace present and loads"
 else
     mkdir -p "$CRITEO_DIR"
     f=$CRITEO_DIR/$CRITEO_PART
@@ -43,8 +43,8 @@ else
 fi
 
 # Meta
-if [ -f data/meta.trace ] && [ -f configs/meta.cfg ]; then
-    echo "  meta: trace present"
+if [ -f configs/meta.cfg ] && trace_ok configs/meta.cfg; then
+    echo "  meta: trace present and loads"
 elif [ ! -s "$META_RAW" ]; then
     echo "  meta: raw file missing ($META_RAW), skipping. Run this on your Mac, then rerun:"
     echo "        ssh $(whoami)@$(hostname -f) 'mkdir -p $(dirname "$META_RAW")'   # once"
