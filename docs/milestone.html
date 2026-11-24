@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scalable DLRM Inference across GPUs and CPU Memory – Milestone Report</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Scalable DLRM Inference across GPUs and CPU Memory</h1>
+  <p>Yosen Lin (yosenl) &amp; Louis Liu (kuanyenl)</p>
+  <p>15-618 Milestone Report · November 23, 2026</p>
+</header>
+
+<div class="layout">
+<aside>
+  <nav>
+    <a href="#completed">Work Completed</a>
+    <a href="#results">Preliminary Results</a>
+    <a href="#changes">Changes &amp; Poster</a>
+    <a href="#schedule">Revised Schedule</a>
+    <a href="#concerns">Primary Concerns</a>
+  </nav>
+</aside>
+
+<main>
+
+<section id="completed">
+  <h2>Work Completed</h2>
+  <p>The full DLRM pipeline (bottom MLP, embedding lookup and pooling, feature interaction, top MLP + sigmoid) is implemented in our CPU reference. The GPU implementations currently cover embedding lookup and pooling only.</p>
+  <ul>
+    <li><b>Datasets:</b> Synthetic Zipf trace generator with three sizes (tiny 5 MB, small 2 GB, medium 10 GB), plus converters for Meta production traces and a 1 TB Criteo click-log slice.</li>
+    <li><b>CPU reference:</b> Complete OpenMP + AVX2 pipeline, up to 8 threads. Serves as the correctness reference and CPU baseline.</li>
+    <li><b>Single-GPU engine:</b> Embedding lookup and sum pooling with coalesced accesses across the embedding dimension.</li>
+    <li><b>CPU–GPU memory tiering:</b>
+      <ul>
+        <li><b>GPU zero-copy (baseline):</b> The GPU reads hot rows from device memory and cold rows directly from mapped host memory over PCIe.</li>
+        <li><b>CPU partial pooling:</b> CPU threads sum cold rows with AVX2 and send one partial-sum vector per bag, and the GPU adds the hot rows.</li>
+      </ul>
+    </li>
+  </ul>
+</section>
+
+<section id="results">
+  <h2>Preliminary Results</h2>
+  <p>All approaches pass the correctness check against the CPU reference. <b>Hardware:</b> CMU GHC node, Intel i7-9700 (8 cores, 15 GiB RAM), NVIDIA RTX 2080 (8 GB), PCIe 3.0 x16. Batch size is 2048 throughout.</p>
+
+  <h3>CPU thread scaling (samples/s)</h3>
+  <table>
+    <tr><th>Threads</th><th>Synthetic small</th><th>Meta</th><th>Criteo slice</th></tr>
+    <tr><td>1</td><td>19,855</td><td>21,051</td><td>17,659</td></tr>
+    <tr><td>2</td><td>37,186</td><td>40,203</td><td>34,409</td></tr>
+    <tr><td>4</td><td>69,769</td><td>74,075</td><td>62,903</td></tr>
+    <tr><td>8</td><td>115,127</td><td>119,142</td><td>102,997</td></tr>
+    <tr><td><b>Speedup</b></td><td><b>5.80×</b></td><td><b>5.66×</b></td><td><b>5.83×</b></td></tr>
+  </table>
+  <p>Scaling is similar on synthetic and real traces. Embedding lookup (memory-bound) is ~31% of 8-thread time; the other stages (compute-bound) are ~69%. So both the sparse path (GPU lookup, tiering) and the dense path (GPU MLPs, interaction, our next step) matter for end-to-end speed.</p>
+
+  <h3>Single-GPU lookup vs. 8-thread CPU</h3>
+  <table>
+    <tr><th>Implementation</th><th>Lookup + pooling (ms)</th><th>Input H2D (ms)</th><th>Overall (ms)</th></tr>
+    <tr><td>8-thread CPU</td><td>5.49</td><td>N/A</td><td>5.49</td></tr>
+    <tr><td>Single GPU</td><td>0.304</td><td>0.174</td><td>0.487</td></tr>
+  </table>
+  <p>The GPU kernel is ~18× faster than the CPU lookup stage and is the baseline for measuring tiering overhead.</p>
+
+  <h3>Tiering: CPU partial pooling vs. GPU zero-copy</h3>
+  <p>Small synthetic workload: 8 tables, pooling factor 32, embedding length 64, same first-rows cache placement. Embedding execution only, including per-batch transfers and synchronization.</p>
+  <table>
+    <tr><th>GPU cache</th><th>Partial pooling (ms)</th><th>Zero-copy (ms)</th><th>Faster</th></tr>
+    <tr><td>0%</td><td>6.43</td><td>15.20</td><td>Partial pooling, 2.36×</td></tr>
+    <tr><td>20%</td><td>5.97</td><td>11.83</td><td>Partial pooling, 1.98×</td></tr>
+    <tr><td>50%</td><td>4.85</td><td>6.63</td><td>Partial pooling, 1.37×</td></tr>
+    <tr><td>80%</td><td>3.23</td><td>2.04</td><td>Zero-copy, 1.58×</td></tr>
+    <tr><td>100%</td><td>2.31</td><td>0.76</td><td>Zero-copy, 3.06×</td></tr>
+  </table>
+  <p>Partial pooling wins when many cold IDs live in host memory, since it sends one vector per bag over PCIe. At high cache fractions few rows are cold, so zero-copy wins while partial pooling still pays for CPU processing and the partial-sum transfer.</p>
+
+  <h3>Hot-row profiling and out-of-core execution</h3>
+  <p>Medium synthetic workload with partial pooling: 26 tables × 1.5M rows, pooling factor 32, embedding length 64. Tables total 9.98 GB, larger than the RTX 2080's 8 GB. Hot rows are chosen from a separate profiling trace.</p>
+  <table>
+    <tr><th>Zipf α</th><th>GPU cache</th><th>Cache size</th><th>Hit rate</th><th>Embedding latency (ms)</th></tr>
+    <tr><td>0.6</td><td>5%</td><td>0.50 GB</td><td>28.4%</td><td>52.67</td></tr>
+    <tr><td>0.6</td><td>10%</td><td>1.00 GB</td><td>36.6%</td><td>49.28</td></tr>
+    <tr><td>1.0</td><td>5%</td><td>0.50 GB</td><td>78.8%</td><td>28.40</td></tr>
+    <tr><td>1.0</td><td>10%</td><td>1.00 GB</td><td>82.6%</td><td>27.29</td></tr>
+    <tr><td>1.2</td><td>5%</td><td>0.50 GB</td><td>94.8%</td><td>19.75</td></tr>
+    <tr><td>1.2</td><td>10%</td><td>1.00 GB</td><td>95.6%</td><td>17.67</td></tr>
+  </table>
+  <p>We can run an embedding workload larger than GPU memory, and higher skew makes a small cache far more effective.</p>
+</section>
+
+<section id="changes">
+  <h2>Changes from Proposal &amp; Poster Plan</h2>
+  <p>Both baselines are complete and validated, and tiering is done and measured. Remaining: the GPU dense stage, multi-GPU sharding on PSC, and stream overlap (which depends on the dense stage). We are somewhat behind on the dense stage and multi-GPU work, so we de-prioritize the stretch goals (hybrid sharding, batch pre-loading, fixed-capacity GPU-count comparison) and revisit them only if we are ahead after the week of 12/3.</p>
+  <h3>Poster plan</h3>
+  <ul>
+    <li>Diagram of the hybrid design: hot rows cached per GPU, cold rows in host DRAM, table-wise sharding with an NCCL all-to-all</li>
+    <li>Line chart of embedding-stage time vs. GPU cache size, CPU pooling vs. zero-copy, on synthetic and Meta data</li>
+    <li>Speedup and scalability graphs from PSC at 1, 2, 4, 8 GPUs</li>
+    <li>Side-by-side flow of CPU pooling vs. zero-copy with PCIe bytes on each arrow</li>
+    <li>Stacked per-stage time bars per configuration, next to a timeline of how much of the shorter path stream overlap hides</li>
+  </ul>
+</section>
+
+<section id="schedule">
+  <h2>Revised Schedule</h2>
+  <ul>
+    <li><b>Nov 24 – 26:</b> cuBLAS dense stage and end-to-end CTR check (Yosen); table-wise sharding with NCCL all-to-all on 2 GPUs (Louis); random-row zero-copy microbenchmark (Yosen).</li>
+    <li><b>Nov 27 – 29:</b> Resolve the median-vs-mean gap at 25–50% cache and add 35% and 75% sweep points for the tiered paths (Yosen); first 2-GPU table-wise run on PSC (Louis); NVIDIA DLRM baseline (Louis).</li>
+    <li><b>Nov 30 – Dec 2:</b> Multi-GPU correctness checks and Slurm scripts for PSC (Yosen); validate table-wise sharding and all-to-all on two PSC GPUs (Yosen); 4-GPU run (Louis); measure r, GPU gather vs. all-to-all bandwidth (Louis).</li>
+    <li><b>Dec 3 – 6:</b> CUDA stream overlap vs. serialized (Yosen); throughput at 1, 2, 4 GPUs, 8 if available (Louis); sweep pooling factor, skew, batch size, MLP width with per-stage timing (Yosen); row-wise sharding if core benchmarks are done (Louis).</li>
+    <li><b>Dec 7 – 10:</b> Rerun key benchmarks, scaling plots and per-stage charts (both); final report due Dec 10, 11:59 PM.</li>
+    <li><b>Dec 11:</b> Poster session</li>
+  </ul>
+</section>
+
+<section id="concerns">
+  <h2>Primary Concerns</h2>
+  <p>No dataset we can run gives tables that are both realistic and the right size. MLPerf multi-hot Criteo is realistic, but the preprocessed set is ~163 GB with no partial download, and its largest tables (~20 GB each) exceed our 8 GB VRAM, 15 GB host RAM and storage quota. The datasets we can run are too small: the Meta file has 8 tables totalling 0.43 GB, and the Criteo slice is a single-lookup (L=1) 48 MB part file, so both fit on one GPU and never force tiering. We plan to look for additional datasets and generate synthetic configurations that meet our benchmarking needs.</p>
+</section>
+
+</main>
+</div>
+
+<footer>15-418/618 · Fall 2026</footer>
+</body>
+</html>
