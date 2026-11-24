@@ -19,7 +19,8 @@
   <nav>
     <a href="#completed">Work Completed</a>
     <a href="#results">Preliminary Results</a>
-    <a href="#changes">Changes &amp; Poster</a>
+    <a href="#changes">Changes from Proposal</a>
+    <a href="#poster">Poster Plan</a>
     <a href="#schedule">Revised Schedule</a>
     <a href="#concerns">Primary Concerns</a>
   </nav>
@@ -93,9 +94,12 @@
 </section>
 
 <section id="changes">
-  <h2>Changes from Proposal &amp; Poster Plan</h2>
+  <h2>Changes from Proposal</h2>
   <p>Both baselines are complete and validated, and tiering is done and measured. Remaining: the GPU dense stage, multi-GPU sharding on PSC, and stream overlap (which depends on the dense stage). We are somewhat behind on the dense stage and multi-GPU work, so we de-prioritize the stretch goals (hybrid sharding, batch pre-loading, fixed-capacity GPU-count comparison) and revisit them only if we are ahead after the week of 12/3.</p>
-  <h3>Poster plan</h3>
+</section>
+
+<section id="poster">
+  <h2>Poster Plan</h2>
   <ul>
     <li>Diagram of the hybrid design: hot rows cached per GPU, cold rows in host DRAM, table-wise sharding with an NCCL all-to-all</li>
     <li>Line chart of embedding-stage time vs. GPU cache size, CPU pooling vs. zero-copy, on synthetic and Meta data</li>
@@ -108,12 +112,45 @@
 <section id="schedule">
   <h2>Revised Schedule</h2>
   <ul>
-    <li><b>Nov 24 – 26:</b> cuBLAS dense stage and end-to-end CTR check (Yosen); table-wise sharding with NCCL all-to-all on 2 GPUs (Louis); random-row zero-copy microbenchmark (Yosen).</li>
-    <li><b>Nov 27 – 29:</b> Resolve the median-vs-mean gap at 25–50% cache and add 35% and 75% sweep points for the tiered paths (Yosen); first 2-GPU table-wise run on PSC (Louis); NVIDIA DLRM baseline (Louis).</li>
-    <li><b>Nov 30 – Dec 2:</b> Multi-GPU correctness checks and Slurm scripts for PSC (Yosen); validate table-wise sharding and all-to-all on two PSC GPUs (Yosen); 4-GPU run (Louis); measure r, GPU gather vs. all-to-all bandwidth (Louis).</li>
-    <li><b>Dec 3 – 6:</b> CUDA stream overlap vs. serialized (Yosen); throughput at 1, 2, 4 GPUs, 8 if available (Louis); sweep pooling factor, skew, batch size, MLP width with per-stage timing (Yosen); row-wise sharding if core benchmarks are done (Louis).</li>
-    <li><b>Dec 7 – 10:</b> Rerun key benchmarks, scaling plots and per-stage charts (both); final report due Dec 10, 11:59 PM.</li>
-    <li><b>Dec 11:</b> Poster session</li>
+    <li>Nov 24 – Nov 26
+      <ul>
+        <li>cuBLAS dense stage and end-to-end CTR check (Yosen)</li>
+        <li>Table-wise sharding with NCCL all-to-all on 2 GPUs (Louis)</li>
+        <li>Random-row zero-copy microbenchmark (Yosen)</li>
+      </ul>
+    </li>
+    <li>Nov 27 – Nov 29
+      <ul>
+        <li>Resolve the median-vs-mean gap at 25–50% cache; add 35% and 75% sweep points for the tiered paths (Yosen)</li>
+        <li>First 2-GPU table-wise run on PSC (Louis)</li>
+        <li>NVIDIA DLRM baseline (Louis)</li>
+      </ul>
+    </li>
+    <li>Nov 30 – Dec 2
+      <ul>
+        <li>Multi-GPU correctness checks and Slurm scripts for PSC (Yosen)</li>
+        <li>Validate table-wise sharding and NCCL all-to-all on two PSC GPUs (Yosen)</li>
+        <li>4-GPU run (Louis)</li>
+        <li>Measure r, GPU gather vs. all-to-all bandwidth, on PSC (Louis)</li>
+      </ul>
+    </li>
+    <li>Dec 3 – Dec 6
+      <ul>
+        <li>CUDA stream overlap vs. serialized execution (Yosen)</li>
+        <li>Throughput at 1, 2, and 4 GPUs on the same PSC node, 8 if available (Louis)</li>
+        <li>Vary pooling factor, skew, batch size and MLP width; measure per-stage time (Yosen)</li>
+        <li>Row-wise sharding if core benchmarks are complete (Louis)</li>
+      </ul>
+    </li>
+    <li>Dec 7 – Dec 10
+      <ul>
+        <li>Rerun key benchmarks; prepare scaling plots and per-stage timing charts (Both)</li>
+        <li>Submit final report Dec 10, 11:59 PM (Both)</li>
+      </ul>
+    </li>
+    <li>Dec 11
+      <ul><li>Poster session (Both)</li></ul>
+    </li>
   </ul>
 </section>
 
